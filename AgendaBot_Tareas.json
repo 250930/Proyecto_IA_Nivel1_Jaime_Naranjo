@@ -1,0 +1,535 @@
+{
+  "name": "AgendaBot_Tareas",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        528
+      ],
+      "id": "6aa683a7-4b13-48e4-a106-1a7f3c90a974",
+      "name": "▶️ Entrada Tareas"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1001,
+          "mode": "list",
+          "cachedResultName": "TAREAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1001"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        928,
+        528
+      ],
+      "id": "82a389d6-58b7-480a-9e15-45cff876b5fe",
+      "name": "📄 TAREAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO TAREAS\n   Pantallas: TAREAS | TAREAS_NUEVA (4 pasos) | TAREAS_ESTADO (2 pasos)\n              TAREAS_CANCELAR (1 paso)\n   Hoja: TAREAS(id_tarea, titulo, prioridad, estado, fecha_objetivo, creado_por)\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Tareas').first().json;\nconst filas = filasReales($input.all(), 'id_tarea');\n\nconst texto = String(ctx.texto || '').trim();\nconst pantalla = String(ctx.pantalla_actual || 'TAREAS').toUpperCase();\nconst paso = String(ctx.paso_actual || '0');\nconst usuario = String(ctx.telegram_user);\nconst d = leerDatos(ctx.datos_parciales);\n\nconst PRIORIDADES = { '1': 'ALTA', '2': 'MEDIA', '3': 'BAJA' };\nconst ESTADOS = { '1': 'PENDIENTE', '2': 'EN PROGRESO', '3': 'COMPLETADA' };\nconst ABIERTAS = ['PENDIENTE', 'EN PROGRESO'];\nconst ICONO = { 'PENDIENTE': '⬜', 'EN PROGRESO': '🔄', 'COMPLETADA': '✅', 'CANCELADA': '🚫' };\nconst PRIO_ICONO = { 'ALTA': '🔴', 'MEDIA': '🟡', 'BAJA': '🟢' };\nconst MANANA = sumarDias(hoyISO(), 1);\n\nconst MENU =\n  '✅ TAREAS\\n' +\n  'Aquí organizas lo que tienes pendiente.\\n\\n' +\n  '1  Crear tarea\\n' +\n  '2  Ver mis tareas\\n' +\n  '3  Cambiar estado de una tarea\\n' +\n  '4  Cancelar tarea\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 2 Ver mis tareas\\n' +\n  'Tip: escribe únicamente el número.';\n\n/* Entrada directa desde el menu principal: se muestra el menu del modulo\n   sin consumir el numero que el usuario uso para entrar. */\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU, 'TAREAS', '0', {}, 'MENU_TAREAS');\n\n\nfunction mias(estados) {\n  return filas.filter(function (r) {\n    return String(r.creado_por || '').trim() === usuario &&\n           (!estados || estados.indexOf(String(r.estado || '').trim().toUpperCase()) !== -1);\n  }).sort(function (a, b) {\n    const pa = { 'ALTA': 0, 'MEDIA': 1, 'BAJA': 2 }[String(a.prioridad || '').toUpperCase()];\n    const pb = { 'ALTA': 0, 'MEDIA': 1, 'BAJA': 2 }[String(b.prioridad || '').toUpperCase()];\n    if (pa !== pb) return (pa == null ? 9 : pa) - (pb == null ? 9 : pb);\n    return String(a.fecha_objetivo || '9999').localeCompare(String(b.fecha_objetivo || '9999'));\n  });\n}\n\nfunction listado(ts) {\n  return ts.map(function (t, i) {\n    const e = String(t.estado || '').toUpperCase();\n    const p = String(t.prioridad || '').toUpperCase();\n    return (i + 1) + ')  ' + (ICONO[e] || '•') + ' ' + t.titulo +\n           '\\n      ' + (PRIO_ICONO[p] || '') + ' ' + p + '  ·  ' + e +\n           '  ·  ' + (t.fecha_objetivo ? '📅 ' + t.fecha_objetivo : 'sin fecha') +\n           '  ·  ' + t.id_tarea;\n  }).join('\\n');\n}\n\nfunction fila(t, cambios) {\n  return {\n    id_tarea: t.id_tarea,\n    titulo: (cambios && cambios.titulo) || t.titulo,\n    prioridad: (cambios && cambios.prioridad) || t.prioridad,\n    estado: (cambios && cambios.estado) || t.estado,\n    fecha_objetivo: (cambios && cambios.fecha_objetivo !== undefined) ? cambios.fecha_objetivo : t.fecha_objetivo,\n    creado_por: t.creado_por\n  };\n}\n\nconst T1 = '🆕 NUEVA TAREA — Paso 1 de 4: TÍTULO\\n\\n' +\n           '¿Qué necesitas hacer?\\n' +\n           'Escríbelo en una frase corta.\\n\\n' +\n           'Ejemplo: Enviar la cotización al cliente\\n\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nconst T2 = '🆕 NUEVA TAREA — Paso 2 de 4: PRIORIDAD\\n\\n' +\n           '¿Qué tan urgente es?\\n\\n' +\n           '1  🔴 Alta\\n' +\n           '2  🟡 Media\\n' +\n           '3  🟢 Baja\\n\\n' +\n           '💡 Recomendado: 2 Media\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nconst T3 = '🆕 NUEVA TAREA — Paso 3 de 4: FECHA OBJETIVO\\n\\n' +\n           '¿Para cuándo debe estar lista?\\n' +\n           'Formato AAAA-MM-DD. Ejemplo: ' + MANANA + '\\n\\n' +\n           'Si no quieres ponerle fecha, escribe 0.\\n\\n' +\n           '💡 Recomendado: ' + MANANA + '\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\n\nfunction resumen() {\n  return '📋 RESUMEN DE LA TAREA\\n\\n' +\n         '📝 Título:     ' + d.titulo + '\\n' +\n         '⚡ Prioridad:  ' + d.prioridad + '\\n' +\n         '📅 Fecha:      ' + (d.fecha_objetivo || 'sin fecha') + '\\n\\n' +\n         '1  Confirmar y guardar\\n' +\n         '2  Editar desde el principio\\n' +\n         '3  Cancelar\\n\\n' +\n         '💡 Recomendado: 1 Confirmar y guardar';\n}\n\n/* ------------------------------------------------------------------ MENU */\nif (pantalla === 'TAREAS') {\n  if (texto === '1') return salida(T1, 'TAREAS_NUEVA', '1', {}, 'WIZARD_INICIADO');\n  if (texto === '2') {\n    const ts = mias(null);\n    if (ts.length === 0)\n      return salida('📭 Todavía no tienes tareas registradas.\\n\\n' + MENU,\n                    'TAREAS', '0', {}, 'CONSULTA_VACIA');\n    const abiertas = ts.filter(function (t) { return ABIERTAS.indexOf(String(t.estado || '').toUpperCase()) !== -1; });\n    return salida('📋 TUS TAREAS (' + ts.length + ' en total · ' + abiertas.length + ' abiertas)\\n\\n' +\n                  listado(ts.slice(0, 20)) +\n                  (ts.length > 20 ? '\\n\\n… y ' + (ts.length - 20) + ' más.' : '') +\n                  '\\n\\n' + MENU, 'TAREAS', '0', {}, 'CONSULTA_OK');\n  }\n  if (texto === '3' || texto === '4') {\n    const ts = mias(ABIERTAS);\n    const destino = texto === '3' ? 'TAREAS_ESTADO' : 'TAREAS_CANCELAR';\n    const verbo = texto === '3' ? 'cambiar de estado' : 'cancelar';\n    if (ts.length === 0)\n      return salida('📭 No tienes tareas abiertas que puedas ' + verbo + '.\\n\\n' + MENU,\n                    'TAREAS', '0', {}, 'SIN_TAREAS');\n    return salida('🔧 ¿Cuál tarea quieres ' + verbo + '?\\n\\n' + listado(ts) + '\\n\\n' +\n                  'Escribe el número de la tarea (1 a ' + ts.length + ').\\n\\n' +\n                  '💡 Recomendado: 1\\n9 Volver   ·   /cancelar Cancelar',\n                  destino, '1', { opciones: ts.map(function (t) { return t.id_tarea; }) },\n                  'SELECCION_PEDIDA');\n  }\n  if (texto === '9') return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.',\n                                   'MENU', '0', {}, 'VOLVER');\n  return salida(opcionInvalida('En Tareas espero un número del 1 al 4, o 9 para volver.') +\n                '\\n\\n' + MENU, 'TAREAS', '0', {}, 'OPCION_INVALIDA');\n}\n\n/* ------------------------------------------------------- WIZARD DE ALTA */\nif (pantalla === 'TAREAS_NUEVA') {\n  if (paso === '1') {\n    if (texto === '9') return salida(MENU, 'TAREAS', '0', {}, 'VOLVER');\n    const t = limpiar(texto);\n    if (vacio(t)) return salida('⚠️ El título no puede quedar vacío.\\n\\n' + T1,\n                                'TAREAS_NUEVA', '1', d, 'VACIO');\n    if (t.length < 3) return salida('⚠️ Ese título es muy corto. Usa al menos 3 caracteres.\\n\\n' + T1,\n                                    'TAREAS_NUEVA', '1', d, 'TITULO_CORTO');\n    d.titulo = t;\n    return salida('✅ Título registrado: ' + d.titulo + '\\n\\n' + T2,\n                  'TAREAS_NUEVA', '2', d, 'PASO_1_OK');\n  }\n  if (paso === '2') {\n    if (texto === '9') return salida(T1, 'TAREAS_NUEVA', '1', d, 'VOLVER_PASO');\n    const p = PRIORIDADES[texto];\n    if (!p) return salida(opcionInvalida('Para la prioridad espero 1, 2 o 3.') + '\\n\\n' + T2,\n                          'TAREAS_NUEVA', '2', d, 'PRIORIDAD_INVALIDA');\n    d.prioridad = p;\n    return salida('✅ Prioridad registrada: ' + d.prioridad + '\\n\\n' + T3,\n                  'TAREAS_NUEVA', '3', d, 'PASO_2_OK');\n  }\n  if (paso === '3') {\n    if (texto === '9') return salida(T2, 'TAREAS_NUEVA', '2', d, 'VOLVER_PASO');\n    if (texto === '0') {\n      d.fecha_objetivo = '';\n    } else {\n      if (!esFechaValida(texto))\n        return salida('⚠️ Formato de fecha incorrecto. Debe ser AAAA-MM-DD, ' +\n                      'por ejemplo ' + MANANA + '. Escribe 0 si no quieres fecha.\\n\\n' + T3,\n                      'TAREAS_NUEVA', '3', d, 'FECHA_INVALIDA');\n      if (texto < hoyISO())\n        return salida('⚠️ Esa fecha ya pasó. Hoy es ' + hoyISO() + '.\\n\\n' + T3,\n                      'TAREAS_NUEVA', '3', d, 'FECHA_PASADA');\n      d.fecha_objetivo = texto;\n    }\n    return salida('✅ Fecha registrada.\\n\\n' + resumen(), 'TAREAS_NUEVA', '4', d, 'PASO_3_OK');\n  }\n  if (paso === '4') {\n    if (texto === '2' || texto === '9')\n      return salida('✏️ Empecemos de nuevo.\\n\\n' + T1, 'TAREAS_NUEVA', '1', {}, 'EDITAR');\n    if (texto === '3')\n      return salida('🗑️ Descarté la tarea. No guardé nada.\\n\\n' + MENU, 'TAREAS', '0', {}, 'CANCELADO');\n    if (texto !== '1')\n      return salida(opcionInvalida('Aquí espero 1, 2 o 3.') + '\\n\\n' + resumen(),\n                    'TAREAS_NUEVA', '4', d, 'OPCION_INVALIDA');\n    if (!d.titulo || !d.prioridad)\n      return salida('⚠️ Faltan datos. Repetimos el proceso.\\n\\n' + T1,\n                    'TAREAS_NUEVA', '1', {}, 'DATOS_INCOMPLETOS');\n\n    const id = siguienteId(filas, 'id_tarea', 'TAREA');\n    const f = {\n      id_tarea: id, titulo: d.titulo, prioridad: d.prioridad, estado: 'PENDIENTE',\n      fecha_objetivo: d.fecha_objetivo || '', creado_por: usuario\n    };\n    return salida('🎉 Tarea creada correctamente.\\n\\n' +\n                  '🆔 ' + id + '\\n📝 ' + f.titulo + '\\n⚡ ' + f.prioridad + '\\n' +\n                  '📅 ' + (f.fecha_objetivo || 'sin fecha') + '\\n🔖 PENDIENTE\\n\\n' + MENU,\n                  'TAREAS', '0', {}, 'TAREA_CREADA:' + id, 'CREAR', f);\n  }\n  return salida(T1, 'TAREAS_NUEVA', '1', {}, 'PASO_DESCONOCIDO');\n}\n\n/* --------------------------------------------------- CAMBIO DE ESTADO */\nif (pantalla === 'TAREAS_ESTADO' || pantalla === 'TAREAS_CANCELAR') {\n  if (texto === '9') return salida(MENU, 'TAREAS', '0', {}, 'VOLVER');\n  const ids = Array.isArray(d.opciones) ? d.opciones : [];\n\n  if (paso === '1') {\n    const n = parseInt(texto, 10);\n    if (!/^\\d+$/.test(texto) || isNaN(n) || n < 1 || n > ids.length)\n      return salida(opcionInvalida('Escribe un número entre 1 y ' + ids.length + '.'),\n                    pantalla, '1', d, 'SELECCION_INVALIDA');\n    const t = filas.find(function (r) { return String(r.id_tarea) === String(ids[n - 1]); });\n    if (!t) return salida('⚠️ No encontré esa tarea.\\n\\n' + MENU, 'TAREAS', '0', {}, 'NO_ENCONTRADA');\n\n    if (pantalla === 'TAREAS_CANCELAR') {\n      return salida('🚫 Tarea cancelada.\\n\\n🆔 ' + t.id_tarea + '\\n📝 ' + t.titulo +\n                    '\\n🔖 Estado: CANCELADA\\n\\n' + MENU,\n                    'TAREAS', '0', {}, 'TAREA_CANCELADA:' + t.id_tarea,\n                    'ACTUALIZAR', fila(t, { estado: 'CANCELADA' }));\n    }\n    d.id_tarea = t.id_tarea;\n    return salida('🔄 ¿A qué estado la movemos?\\n\\n' +\n                  'Tarea: ' + t.titulo + '\\nEstado actual: ' + t.estado + '\\n\\n' +\n                  '1  ⬜ Pendiente\\n2  🔄 En progreso\\n3  ✅ Completada\\n\\n' +\n                  '💡 Recomendado: 3 Completada\\n9 Volver   ·   /cancelar Cancelar',\n                  'TAREAS_ESTADO', '2', d, 'ESTADO_PEDIDO');\n  }\n\n  if (paso === '2') {\n    const e = ESTADOS[texto];\n    if (!e) return salida(opcionInvalida('Espero 1, 2 o 3.'), 'TAREAS_ESTADO', '2', d, 'ESTADO_INVALIDO');\n    const t = filas.find(function (r) { return String(r.id_tarea) === String(d.id_tarea); });\n    if (!t) return salida('⚠️ No encontré esa tarea.\\n\\n' + MENU, 'TAREAS', '0', {}, 'NO_ENCONTRADA');\n    return salida('✅ Estado actualizado.\\n\\n🆔 ' + t.id_tarea + '\\n📝 ' + t.titulo +\n                  '\\nAntes: ' + t.estado + '\\nAhora: ' + e + '\\n\\n' + MENU,\n                  'TAREAS', '0', {}, 'ESTADO_CAMBIADO:' + t.id_tarea + '->' + e,\n                  'ACTUALIZAR', fila(t, { estado: e }));\n  }\n  return salida(MENU, 'TAREAS', '0', {}, 'PASO_DESCONOCIDO');\n}\n\nreturn salida(MENU, 'TAREAS', '0', {}, 'PANTALLA_DESCONOCIDA');\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        528
+      ],
+      "id": "f8bf1f28-838b-4769-a973-14b7c8840d48",
+      "name": "🧠 Lógica de Tareas"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1ce1730f-5aee-51a5-a88b-c535beced94c",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "NINGUNA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NINGUNA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "fd89abf4-7ab4-5622-9f16-bec83cd8a4f3",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "CREAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREAR"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "082ab78c-a4d0-5dbc-830e-4b424899938e",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "ACTUALIZAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ACTUALIZAR"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": 0
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1408,
+        528
+      ],
+      "id": "ee606be5-598d-4136-8874-a64aa6266929",
+      "name": "🔀 Acción sobre TAREAS"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        368
+      ],
+      "id": "8c086c18-e401-4bc2-833d-3a6e9571d695",
+      "name": "⏸️ Sin Escritura"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "TAREAS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_tarea": "={{ $json.fila.id_tarea }}",
+            "titulo": "={{ $json.fila.titulo }}",
+            "prioridad": "={{ $json.fila.prioridad }}",
+            "estado": "={{ $json.fila.estado }}",
+            "fecha_objetivo": "={{ $json.fila.fecha_objetivo }}",
+            "creado_por": "={{ $json.fila.creado_por }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_tarea",
+              "displayName": "id_tarea",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "titulo",
+              "displayName": "titulo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "prioridad",
+              "displayName": "prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_objetivo",
+              "displayName": "fecha_objetivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "creado_por",
+              "displayName": "creado_por",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1680,
+        544
+      ],
+      "id": "1d75e933-6994-4068-853d-51c8f288aec0",
+      "name": "➕ TAREAS - Crear",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "TAREAS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_tarea": "={{ $json.fila.id_tarea }}",
+            "titulo": "={{ $json.fila.titulo }}",
+            "prioridad": "={{ $json.fila.prioridad }}",
+            "estado": "={{ $json.fila.estado }}",
+            "fecha_objetivo": "={{ $json.fila.fecha_objetivo }}",
+            "creado_por": "={{ $json.fila.creado_por }}"
+          },
+          "matchingColumns": [
+            "id_tarea"
+          ],
+          "schema": [
+            {
+              "id": "id_tarea",
+              "displayName": "id_tarea",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "titulo",
+              "displayName": "titulo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "prioridad",
+              "displayName": "prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_objetivo",
+              "displayName": "fecha_objetivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "creado_por",
+              "displayName": "creado_por",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1680,
+        736
+      ],
+      "id": "50aaf531-a561-41db-890f-995bdefa2fc3",
+      "name": "✏️ TAREAS - Actualizar",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('🧠 Lógica de Tareas').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje, pantalla_nueva: r.pantalla_nueva, paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales, resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        544
+      ],
+      "id": "d54a3b48-941f-45f3-86ca-e842c74f0df0",
+      "name": "📦 Salida Tareas"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO TAREAS\n\n**Pantallas**: `TAREAS` (menú) · `TAREAS_NUEVA` (4 pasos) · `TAREAS_ESTADO` (2 pasos) · `TAREAS_CANCELAR` (1 paso).\n\n**Estados**: `PENDIENTE` → `EN PROGRESO` → `COMPLETADA`, más `CANCELADA` como salida en cualquier momento.\n\n**Prioridades**: `ALTA` 🔴 · `MEDIA` 🟡 · `BAJA` 🟢. El listado se ordena primero por prioridad y luego por `fecha_objetivo`, así lo urgente queda arriba.\n\nLa fecha objetivo es **opcional**: escribiendo `0` la tarea se guarda sin fecha. Si se indica, se valida formato y que no sea pasada.",
+        "height": 440,
+        "width": 640,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        688,
+        -16
+      ],
+      "id": "465857b6-335c-4c40-8b3c-e22d2561cc0a",
+      "name": "NOTA TAREAS"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Tareas": {
+      "main": [
+        [
+          {
+            "node": "📄 TAREAS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 TAREAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "🧠 Lógica de Tareas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Lógica de Tareas": {
+      "main": [
+        [
+          {
+            "node": "🔀 Acción sobre TAREAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Acción sobre TAREAS": {
+      "main": [
+        [
+          {
+            "node": "⏸️ Sin Escritura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "➕ TAREAS - Crear",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✏️ TAREAS - Actualizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏸️ Sin Escritura": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Tareas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "➕ TAREAS - Crear": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Tareas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ TAREAS - Actualizar": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Tareas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5f251010-d285-46e2-a56e-9e9981ba2dbb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "ZYsJUGdQCfg3ERuQ",
+  "tags": []
+}

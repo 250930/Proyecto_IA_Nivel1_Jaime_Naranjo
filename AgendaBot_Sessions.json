@@ -1,0 +1,213 @@
+{
+  "name": "AgendaBot_Sessions",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        112,
+        432
+      ],
+      "id": "530fec83-caff-456c-aedf-4ec5bfe40a18",
+      "name": "▶️ Entrada Sessions"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* Normaliza el objeto de sesion que llega desde AgendaBot_Main y garantiza\n   que las cinco columnas existan siempre, aunque el llamador omita alguna. */\nconst c = $input.first().json;\nconst s = c.sesion || {};\nreturn [{ json: Object.assign({}, c, { sesion: {\n  telegram_user: String(s.telegram_user || c.telegram_user || ''),\n  pantalla_actual: String(s.pantalla_actual || 'MENU').toUpperCase(),\n  paso_actual: String(s.paso_actual == null ? '0' : s.paso_actual),\n  datos_parciales: (typeof s.datos_parciales === 'string' && s.datos_parciales) ? s.datos_parciales : '{}',\n  timestamp_ultima_interaccion: String(s.timestamp_ultima_interaccion || timestampCO())\n}})}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        432
+      ],
+      "id": "51a2026b-0500-4900-a57d-5ae5c8ecc9bd",
+      "name": "🧩 Normalizar Sesión"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SESSIONS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telegram_user": "={{ $json.sesion.telegram_user }}",
+            "pantalla_actual": "={{ $json.sesion.pantalla_actual }}",
+            "paso_actual": "={{ $json.sesion.paso_actual }}",
+            "datos_parciales": "={{ $json.sesion.datos_parciales }}",
+            "timestamp_ultima_interaccion": "={{ $json.sesion.timestamp_ultima_interaccion }}"
+          },
+          "matchingColumns": [
+            "telegram_user"
+          ],
+          "schema": [
+            {
+              "id": "telegram_user",
+              "displayName": "telegram_user",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pantalla_actual",
+              "displayName": "pantalla_actual",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "paso_actual",
+              "displayName": "paso_actual",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "datos_parciales",
+              "displayName": "datos_parciales",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timestamp_ultima_interaccion",
+              "displayName": "timestamp_ultima_interaccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        592,
+        432
+      ],
+      "id": "15c2d751-ea13-4e61-b66d-232307bca13a",
+      "name": "💾 SESSIONS - Guardar",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* Devuelve el payload original para que el flujo llamante pueda seguir\n   encadenando (por ejemplo, hacia AgendaBot_Logs). */\nreturn [{ json: $('🧩 Normalizar Sesión').first().json }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        432
+      ],
+      "id": "ba9fb8e8-aa10-4789-a7c2-2902a8a8b3b3",
+      "name": "↩️ Devolver Contexto"
+    },
+    {
+      "parameters": {
+        "content": "## SERVICIO SESSIONS — la memoria del bot\n\nTelegram no guarda estado y HTTP no tiene memoria: cada mensaje llega **suelto**. Esta hoja es lo que convierte mensajes sueltos en una **conversación**.\n\n**Operación `appendOrUpdate`** con columna clave `telegram_user`:\n- si el usuario ya tiene fila, la **actualiza**;\n- si no la tiene, la **crea**.\n\nAsí existe exactamente **una fila por usuario**, sin duplicados y sin necesidad de un IF previo.\n\n`datos_parciales` guarda el borrador del wizard como texto JSON: una sola celda contiene fecha, hora, nombre, motivo y canal a medio llenar.",
+        "height": 460,
+        "width": 640,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        -112
+      ],
+      "id": "f6e8d699-b895-4ae9-9598-58da40f912e0",
+      "name": "NOTA SESSIONS"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Sessions": {
+      "main": [
+        [
+          {
+            "node": "🧩 Normalizar Sesión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Normalizar Sesión": {
+      "main": [
+        [
+          {
+            "node": "💾 SESSIONS - Guardar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 SESSIONS - Guardar": {
+      "main": [
+        [
+          {
+            "node": "↩️ Devolver Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "baae846b-5c83-48ff-ad32-63df962fc915",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "XrjQDsGgS6lMcACw",
+  "tags": []
+}

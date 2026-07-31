@@ -1,0 +1,220 @@
+{
+  "name": "AgendaBot_Recordatorios",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1024,
+        1136
+      ],
+      "id": "de63e688-9ac0-4f0c-96e8-954ed40d0470",
+      "name": "▶️ Entrada Recordatorios"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "CITAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1296,
+        1024
+      ],
+      "id": "1ba92ba7-70a0-4c27-914d-2d8d6822c90d",
+      "name": "📄 CITAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "TAREAS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1296,
+        1264
+      ],
+      "id": "dadf8a30-63da-4071-83e7-f3d0ac7f341c",
+      "name": "📄 TAREAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1552,
+        1136
+      ],
+      "id": "aecf8b5e-8dfe-426e-845f-299092f7811c",
+      "name": "🔗 Unir CITAS y TAREAS"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO RECORDATORIOS  (solo consulta, no escribe en Google Sheets)\n   Pantalla: RECORDATORIOS\n   Fuentes: CITAS (rama 1 del Merge) + TAREAS (rama 2 del Merge)\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Recordatorios').first().json;\nconst citas = filasReales($('📄 CITAS - Leer').all(), 'id_cita');\nconst tareas = filasReales($('📄 TAREAS - Leer').all(), 'id_tarea');\n\nconst texto = String(ctx.texto || '').trim();\nconst usuario = String(ctx.telegram_user);\nconst HOY = hoyISO();\nconst AHORA = horaActual();\nconst ACTIVAS = ['PENDIENTE', 'REPROGRAMADA'];\nconst ABIERTAS = ['PENDIENTE', 'EN PROGRESO'];\n\nconst MENU =\n  '🔔 RECORDATORIOS\\n' +\n  'Aquí ves lo que se viene y lo que está por vencer.\\n\\n' +\n  '1  Próximas 24 horas\\n' +\n  '2  Próximos 7 días\\n' +\n  '3  Agenda de hoy\\n' +\n  '4  Tareas vencidas y por vencer\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 1 Próximas 24 horas\\n' +\n  'Tip: escribe únicamente el número.';\n\n/* Entrada directa desde el menu principal: se muestra el menu del modulo\n   sin consumir el numero que el usuario uso para entrar. */\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU, 'RECORDATORIOS', '0', {}, 'MENU_RECORDATORIOS');\n\nfunction misCitas() {\n  return citas.filter(function (c) {\n    return String(c.creado_por || '').trim() === usuario &&\n           ACTIVAS.indexOf(String(c.estado || '').toUpperCase()) !== -1;\n  }).sort(function (a, b) {\n    return (String(a.fecha) + String(a.hora)).localeCompare(String(b.fecha) + String(b.hora));\n  });\n}\nfunction misTareas() {\n  return tareas.filter(function (t) {\n    return String(t.creado_por || '').trim() === usuario &&\n           ABIERTAS.indexOf(String(t.estado || '').toUpperCase()) !== -1;\n  });\n}\nfunction pinta(cs) {\n  return cs.map(function (c) {\n    return '• ' + c.fecha + '  ' + c.hora + '   ' + c.nombre +\n           '\\n    ' + c.motivo + '  ·  ' + c.canal + '  ·  ' + c.id_cita;\n  }).join('\\n');\n}\n\nif (texto === '9')\n  return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.',\n                'MENU', '0', {}, 'VOLVER');\n\nif (texto === '1') {\n  const limite = sumarDias(HOY, 1);\n  const cs = misCitas().filter(function (c) {\n    const f = String(c.fecha), h = String(c.hora);\n    if (f === HOY) return h >= AHORA;\n    if (f === limite) return h <= AHORA;\n    return false;\n  });\n  if (cs.length === 0)\n    return salida('😌 No tienes nada agendado en las próximas 24 horas.\\n\\n' + MENU,\n                  'RECORDATORIOS', '0', {}, 'SIN_EVENTOS');\n  return salida('⏰ PRÓXIMAS 24 HORAS (' + cs.length + ')\\n\\n' + pinta(cs) + '\\n\\n' + MENU,\n                'RECORDATORIOS', '0', {}, 'CONSULTA_24H');\n}\n\nif (texto === '2') {\n  const limite = sumarDias(HOY, 7);\n  const cs = misCitas().filter(function (c) {\n    return String(c.fecha) >= HOY && String(c.fecha) <= limite;\n  });\n  if (cs.length === 0)\n    return salida('😌 No tienes citas en los próximos 7 días.\\n\\n' + MENU,\n                  'RECORDATORIOS', '0', {}, 'SIN_EVENTOS');\n  return salida('📆 PRÓXIMOS 7 DÍAS (' + HOY + ' → ' + limite + ')\\n' +\n                cs.length + ' cita(s)\\n\\n' + pinta(cs.slice(0, 20)) + '\\n\\n' + MENU,\n                'RECORDATORIOS', '0', {}, 'CONSULTA_7D');\n}\n\nif (texto === '3') {\n  const cs = misCitas().filter(function (c) { return String(c.fecha) === HOY; });\n  const pend = cs.filter(function (c) { return String(c.hora) >= AHORA; });\n  if (cs.length === 0)\n    return salida('☀️ Hoy (' + HOY + ') no tienes citas agendadas.\\n' +\n                  'Aprovecha para adelantar tus tareas.\\n\\n' + MENU,\n                  'RECORDATORIOS', '0', {}, 'SIN_EVENTOS');\n  return salida('☀️ AGENDA DE HOY  ' + HOY + '\\n' +\n                cs.length + ' cita(s) · ' + pend.length + ' aún por delante (son las ' + AHORA + ')\\n\\n' +\n                pinta(cs) + '\\n\\n' + MENU, 'RECORDATORIOS', '0', {}, 'CONSULTA_HOY');\n}\n\nif (texto === '4') {\n  const ts = misTareas();\n  const vencidas = ts.filter(function (t) { return t.fecha_objetivo && String(t.fecha_objetivo) < HOY; });\n  const hoyT = ts.filter(function (t) { return String(t.fecha_objetivo) === HOY; });\n  const semana = ts.filter(function (t) {\n    return t.fecha_objetivo && String(t.fecha_objetivo) > HOY && String(t.fecha_objetivo) <= sumarDias(HOY, 7);\n  });\n  const sinFecha = ts.filter(function (t) { return !t.fecha_objetivo; });\n  function lst(x) {\n    return x.length === 0 ? '   (ninguna)'\n      : x.map(function (t) { return '   • ' + t.titulo + '  [' + t.prioridad + ']' +\n              (t.fecha_objetivo ? '  📅 ' + t.fecha_objetivo : ''); }).join('\\n');\n  }\n  return salida('📌 ESTADO DE TUS TAREAS   (hoy: ' + HOY + ')\\n\\n' +\n                '🔴 VENCIDAS (' + vencidas.length + ')\\n' + lst(vencidas) + '\\n\\n' +\n                '🟠 PARA HOY (' + hoyT.length + ')\\n' + lst(hoyT) + '\\n\\n' +\n                '🟡 ESTA SEMANA (' + semana.length + ')\\n' + lst(semana) + '\\n\\n' +\n                '⚪ SIN FECHA (' + sinFecha.length + ')\\n' + lst(sinFecha) + '\\n\\n' + MENU,\n                'RECORDATORIOS', '0', {}, 'CONSULTA_TAREAS');\n}\n\nreturn salida(opcionInvalida('En Recordatorios espero 1, 2, 3, 4 o 9.') + '\\n\\n' + MENU,\n              'RECORDATORIOS', '0', {}, texto === '' ? 'VACIO' : 'OPCION_INVALIDA');\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        1136
+      ],
+      "id": "91ec7434-752e-41da-8f6b-5a1d24345e51",
+      "name": "🧠 Lógica de Recordatorios"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('🧠 Lógica de Recordatorios').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje, pantalla_nueva: r.pantalla_nueva, paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales, resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        1136
+      ],
+      "id": "ea866e1e-cbdb-4db5-b8d6-c4c6c88a2ca9",
+      "name": "📦 Salida Recordatorios"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO RECORDATORIOS (solo lectura)\n\nEste módulo **nunca escribe** en Google Sheets: únicamente consulta y resume. Por eso no tiene Switch de acción.\n\nLas dos lecturas son **paralelas** y se reúnen con un nodo **Merge** en modo `append`. Así el módulo espera a que ambas hojas estén disponibles antes de razonar, y la lógica accede a cada una por su nombre de nodo.\n\n**Opciones**: próximas 24 h · próximos 7 días · agenda de hoy · tareas vencidas / de hoy / de la semana / sin fecha.\n\nLos avisos **automáticos** viven en `AgendaBot_Automatizaciones`.",
+        "height": 440,
+        "width": 680,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        656
+      ],
+      "id": "1720bee0-6bde-432c-b48c-84dce6772d2d",
+      "name": "NOTA RECORDATORIOS"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Recordatorios": {
+      "main": [
+        [
+          {
+            "node": "📄 CITAS - Leer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📄 TAREAS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 CITAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "🔗 Unir CITAS y TAREAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 TAREAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "🔗 Unir CITAS y TAREAS",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "🔗 Unir CITAS y TAREAS": {
+      "main": [
+        [
+          {
+            "node": "🧠 Lógica de Recordatorios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Lógica de Recordatorios": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Recordatorios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "19f5074c-e1ac-4ed8-b573-1c0dda5adf59",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "W3PQIitGnrFC5Lvy",
+  "tags": []
+}

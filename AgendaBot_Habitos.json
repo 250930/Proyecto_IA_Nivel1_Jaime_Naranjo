@@ -1,0 +1,513 @@
+{
+  "name": "AgendaBot_Habitos",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        352,
+        896
+      ],
+      "id": "b6127997-ba3d-4362-879a-67945a485812",
+      "name": "▶️ Entrada Hábitos"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1002,
+          "mode": "list",
+          "cachedResultName": "HABITOS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1002"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        592,
+        896
+      ],
+      "id": "393f98a8-50a7-4648-aabe-cb988d3f2e45",
+      "name": "📄 HABITOS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO HABITOS\n   Pantallas: HABITOS | HABITOS_NUEVO (4 pasos) | HABITOS_EDITAR (3 pasos)\n              HABITOS_ESTADO (2 pasos) | HABITOS_ELIMINAR (2 pasos)\n   Hoja: HABITOS(id_habito, nombre, frecuencia, hora_recordatorio, estado)\n   NOTA DE DISENO: la hoja HABITOS no tiene columna creado_por, por lo que\n   los habitos son compartidos por todos los usuarios del bot.\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Hábitos').first().json;\nconst filas = filasReales($input.all(), 'id_habito');\n\nconst texto = String(ctx.texto || '').trim();\nconst pantalla = String(ctx.pantalla_actual || 'HABITOS').toUpperCase();\nconst paso = String(ctx.paso_actual || '0');\nconst d = leerDatos(ctx.datos_parciales);\n\nconst FRECUENCIAS = { '1': 'DIARIO', '2': 'DIAS HABILES', '3': 'SEMANAL', '4': 'MENSUAL' };\nconst ICONO = { 'ACTIVO': '🟢', 'INACTIVO': '⚪', 'ELIMINADO': '🗑️' };\n\nconst MENU =\n  '🔁 HÁBITOS\\n' +\n  'Aquí construyes rutinas y recibes recordatorios de ellas.\\n\\n' +\n  '1  Crear hábito\\n' +\n  '2  Ver hábitos\\n' +\n  '3  Editar hábito\\n' +\n  '4  Activar o desactivar hábito\\n' +\n  '5  Eliminar hábito\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 2 Ver hábitos\\n' +\n  'Tip: escribe únicamente el número.';\n\n/* Entrada directa desde el menu principal: se muestra el menu del modulo\n   sin consumir el numero que el usuario uso para entrar. */\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU, 'HABITOS', '0', {}, 'MENU_HABITOS');\n\n\nfunction vivos() {\n  return filas.filter(function (r) {\n    return String(r.estado || '').trim().toUpperCase() !== 'ELIMINADO';\n  }).sort(function (a, b) { return String(a.id_habito).localeCompare(String(b.id_habito)); });\n}\n\nfunction listado(hs) {\n  return hs.map(function (h, i) {\n    const e = String(h.estado || '').toUpperCase();\n    return (i + 1) + ')  ' + (ICONO[e] || '•') + ' ' + h.nombre +\n           '\\n      🔁 ' + h.frecuencia + '  ·  ⏰ ' + h.hora_recordatorio +\n           '  ·  ' + e + '  ·  ' + h.id_habito;\n  }).join('\\n');\n}\n\nfunction fila(h, cambios) {\n  return {\n    id_habito: h.id_habito,\n    nombre: (cambios && cambios.nombre) || h.nombre,\n    frecuencia: (cambios && cambios.frecuencia) || h.frecuencia,\n    hora_recordatorio: (cambios && cambios.hora_recordatorio) || h.hora_recordatorio,\n    estado: (cambios && cambios.estado) || h.estado\n  };\n}\n\nconst H1 = '🆕 NUEVO HÁBITO — Paso 1 de 4: NOMBRE\\n\\n' +\n           '¿Qué hábito quieres construir?\\n\\n' +\n           'Ejemplo: Caminar 30 minutos\\n\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nconst H2 = '🆕 NUEVO HÁBITO — Paso 2 de 4: FRECUENCIA\\n\\n' +\n           '¿Cada cuánto lo vas a hacer?\\n\\n' +\n           '1  Diario\\n2  Días hábiles (lunes a viernes)\\n3  Semanal\\n4  Mensual\\n\\n' +\n           '💡 Recomendado: 1 Diario\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nconst H3 = '🆕 NUEVO HÁBITO — Paso 3 de 4: HORA DE RECORDATORIO\\n\\n' +\n           '¿A qué hora quieres que te lo recuerde?\\n' +\n           'Formato HH:MM de 24 horas. Ejemplo: 07:00\\n\\n' +\n           '💡 Recomendado: 07:00\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\n\nfunction resumen() {\n  return '📋 RESUMEN DEL HÁBITO\\n\\n' +\n         '🔁 Nombre:      ' + d.nombre + '\\n' +\n         '📆 Frecuencia:  ' + d.frecuencia + '\\n' +\n         '⏰ Hora:        ' + d.hora + '\\n\\n' +\n         '1  Confirmar y guardar\\n2  Editar desde el principio\\n3  Cancelar\\n\\n' +\n         '💡 Recomendado: 1 Confirmar y guardar';\n}\n\nfunction pedirSeleccion(hs, verbo, destino) {\n  return salida('🔧 ¿Cuál hábito quieres ' + verbo + '?\\n\\n' + listado(hs) + '\\n\\n' +\n                'Escribe el número del hábito (1 a ' + hs.length + ').\\n\\n' +\n                '💡 Recomendado: 1\\n9 Volver   ·   /cancelar Cancelar',\n                destino, '1', { opciones: hs.map(function (h) { return h.id_habito; }) },\n                'SELECCION_PEDIDA');\n}\n\n/* ------------------------------------------------------------------ MENU */\nif (pantalla === 'HABITOS') {\n  if (texto === '1') return salida(H1, 'HABITOS_NUEVO', '1', {}, 'WIZARD_INICIADO');\n  if (texto === '2') {\n    const hs = vivos();\n    if (hs.length === 0)\n      return salida('📭 Todavía no hay hábitos registrados.\\n\\n' + MENU,\n                    'HABITOS', '0', {}, 'CONSULTA_VACIA');\n    const act = hs.filter(function (h) { return String(h.estado || '').toUpperCase() === 'ACTIVO'; });\n    return salida('🔁 HÁBITOS (' + hs.length + ' · ' + act.length + ' activos)\\n\\n' +\n                  listado(hs.slice(0, 20)) + '\\n\\n' + MENU, 'HABITOS', '0', {}, 'CONSULTA_OK');\n  }\n  if (texto === '3' || texto === '4' || texto === '5') {\n    const hs = vivos();\n    if (hs.length === 0)\n      return salida('📭 No hay hábitos registrados todavía.\\n\\n' + MENU,\n                    'HABITOS', '0', {}, 'SIN_HABITOS');\n    const cfg = { '3': ['editar', 'HABITOS_EDITAR'],\n                  '4': ['activar o desactivar', 'HABITOS_ESTADO'],\n                  '5': ['eliminar', 'HABITOS_ELIMINAR'] }[texto];\n    return pedirSeleccion(hs, cfg[0], cfg[1]);\n  }\n  if (texto === '9') return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.',\n                                   'MENU', '0', {}, 'VOLVER');\n  return salida(opcionInvalida('En Hábitos espero un número del 1 al 5, o 9 para volver.') +\n                '\\n\\n' + MENU, 'HABITOS', '0', {}, 'OPCION_INVALIDA');\n}\n\n/* ----------------------------------------------------------- ALTA */\nif (pantalla === 'HABITOS_NUEVO') {\n  if (paso === '1') {\n    if (texto === '9') return salida(MENU, 'HABITOS', '0', {}, 'VOLVER');\n    const n = limpiar(texto);\n    if (vacio(n)) return salida('⚠️ El nombre no puede quedar vacío.\\n\\n' + H1,\n                                'HABITOS_NUEVO', '1', d, 'VACIO');\n    if (n.length < 3) return salida('⚠️ Ese nombre es muy corto. Usa al menos 3 caracteres.\\n\\n' + H1,\n                                    'HABITOS_NUEVO', '1', d, 'NOMBRE_CORTO');\n    const dup = vivos().some(function (h) {\n      return String(h.nombre || '').trim().toLowerCase() === n.toLowerCase();\n    });\n    if (dup) return salida('⚠️ Ya existe un hábito con ese nombre.\\n' +\n                           'Elige otro nombre para no confundirte.\\n\\n' + H1,\n                           'HABITOS_NUEVO', '1', d, 'NOMBRE_DUPLICADO');\n    d.nombre = n;\n    return salida('✅ Nombre registrado: ' + d.nombre + '\\n\\n' + H2,\n                  'HABITOS_NUEVO', '2', d, 'PASO_1_OK');\n  }\n  if (paso === '2') {\n    if (texto === '9') return salida(H1, 'HABITOS_NUEVO', '1', d, 'VOLVER_PASO');\n    const f = FRECUENCIAS[texto];\n    if (!f) return salida(opcionInvalida('Para la frecuencia espero 1, 2, 3 o 4.') + '\\n\\n' + H2,\n                          'HABITOS_NUEVO', '2', d, 'FRECUENCIA_INVALIDA');\n    d.frecuencia = f;\n    return salida('✅ Frecuencia registrada: ' + d.frecuencia + '\\n\\n' + H3,\n                  'HABITOS_NUEVO', '3', d, 'PASO_2_OK');\n  }\n  if (paso === '3') {\n    if (texto === '9') return salida(H2, 'HABITOS_NUEVO', '2', d, 'VOLVER_PASO');\n    if (!esHoraValida(texto))\n      return salida('⚠️ Formato de hora incorrecto. Debe ser HH:MM, por ejemplo 07:00.\\n\\n' + H3,\n                    'HABITOS_NUEVO', '3', d, 'HORA_INVALIDA');\n    d.hora = texto;\n    return salida('✅ Hora registrada: ' + d.hora + '\\n\\n' + resumen(),\n                  'HABITOS_NUEVO', '4', d, 'PASO_3_OK');\n  }\n  if (paso === '4') {\n    if (texto === '2' || texto === '9')\n      return salida('✏️ Empecemos de nuevo.\\n\\n' + H1, 'HABITOS_NUEVO', '1', {}, 'EDITAR');\n    if (texto === '3')\n      return salida('🗑️ Descarté el hábito. No guardé nada.\\n\\n' + MENU, 'HABITOS', '0', {}, 'CANCELADO');\n    if (texto !== '1')\n      return salida(opcionInvalida('Aquí espero 1, 2 o 3.') + '\\n\\n' + resumen(),\n                    'HABITOS_NUEVO', '4', d, 'OPCION_INVALIDA');\n    if (!d.nombre || !d.frecuencia || !d.hora)\n      return salida('⚠️ Faltan datos. Repetimos el proceso.\\n\\n' + H1,\n                    'HABITOS_NUEVO', '1', {}, 'DATOS_INCOMPLETOS');\n    const id = siguienteId(filas, 'id_habito', 'HAB');\n    const f = { id_habito: id, nombre: d.nombre, frecuencia: d.frecuencia,\n                hora_recordatorio: d.hora, estado: 'ACTIVO' };\n    return salida('🎉 Hábito creado correctamente.\\n\\n🆔 ' + id + '\\n🔁 ' + f.nombre +\n                  '\\n📆 ' + f.frecuencia + '\\n⏰ ' + f.hora_recordatorio + '\\n🟢 ACTIVO\\n\\n' + MENU,\n                  'HABITOS', '0', {}, 'HABITO_CREADO:' + id, 'CREAR', f);\n  }\n  return salida(H1, 'HABITOS_NUEVO', '1', {}, 'PASO_DESCONOCIDO');\n}\n\n/* ------------------------------------------- EDITAR / ESTADO / ELIMINAR */\nif (pantalla === 'HABITOS_EDITAR' || pantalla === 'HABITOS_ESTADO' || pantalla === 'HABITOS_ELIMINAR') {\n  if (texto === '9') return salida(MENU, 'HABITOS', '0', {}, 'VOLVER');\n  const ids = Array.isArray(d.opciones) ? d.opciones : [];\n\n  if (paso === '1') {\n    const n = parseInt(texto, 10);\n    if (!/^\\d+$/.test(texto) || isNaN(n) || n < 1 || n > ids.length)\n      return salida(opcionInvalida('Escribe un número entre 1 y ' + ids.length + '.'),\n                    pantalla, '1', d, 'SELECCION_INVALIDA');\n    const h = filas.find(function (r) { return String(r.id_habito) === String(ids[n - 1]); });\n    if (!h) return salida('⚠️ No encontré ese hábito.\\n\\n' + MENU, 'HABITOS', '0', {}, 'NO_ENCONTRADO');\n    d.id_habito = h.id_habito;\n\n    if (pantalla === 'HABITOS_ELIMINAR') {\n      return salida('🗑️ ¿Seguro que quieres eliminar este hábito?\\n\\n' +\n                    '🔁 ' + h.nombre + '\\n📆 ' + h.frecuencia + '\\n⏰ ' + h.hora_recordatorio + '\\n\\n' +\n                    '1  Sí, eliminar\\n2  No, conservarlo\\n\\n' +\n                    '💡 Recomendado: 2 No, conservarlo',\n                    'HABITOS_ELIMINAR', '2', d, 'CONFIRMACION_PEDIDA');\n    }\n    if (pantalla === 'HABITOS_ESTADO') {\n      return salida('🔄 Hábito: ' + h.nombre + '\\nEstado actual: ' + h.estado + '\\n\\n' +\n                    '¿Qué quieres hacer?\\n\\n1  🟢 Activar\\n2  ⚪ Desactivar\\n\\n' +\n                    '💡 Recomendado: ' + (String(h.estado).toUpperCase() === 'ACTIVO' ? '2 Desactivar' : '1 Activar') +\n                    '\\n9 Volver   ·   /cancelar Cancelar',\n                    'HABITOS_ESTADO', '2', d, 'ACCION_PEDIDA');\n    }\n    return salida('✏️ Hábito: ' + h.nombre + '\\n\\n¿Qué campo quieres cambiar?\\n\\n' +\n                  '1  Nombre        (actual: ' + h.nombre + ')\\n' +\n                  '2  Frecuencia    (actual: ' + h.frecuencia + ')\\n' +\n                  '3  Hora          (actual: ' + h.hora_recordatorio + ')\\n\\n' +\n                  '💡 Recomendado: 3 Hora\\n9 Volver   ·   /cancelar Cancelar',\n                  'HABITOS_EDITAR', '2', d, 'CAMPO_PEDIDO');\n  }\n\n  const h = filas.find(function (r) { return String(r.id_habito) === String(d.id_habito); });\n  if (!h) return salida('⚠️ No encontré ese hábito.\\n\\n' + MENU, 'HABITOS', '0', {}, 'NO_ENCONTRADO');\n\n  if (pantalla === 'HABITOS_ELIMINAR' && paso === '2') {\n    if (texto === '2') return salida('👌 No eliminé nada.\\n\\n' + MENU, 'HABITOS', '0', {}, 'ELIMINACION_ABORTADA');\n    if (texto !== '1') return salida(opcionInvalida('Espero 1 (sí) o 2 (no).'),\n                                     'HABITOS_ELIMINAR', '2', d, 'OPCION_INVALIDA');\n    return salida('🗑️ Hábito eliminado.\\n\\n🆔 ' + h.id_habito + '\\n🔁 ' + h.nombre +\n                  '\\n\\nEl registro se conserva marcado como ELIMINADO para no perder el historial.\\n\\n' + MENU,\n                  'HABITOS', '0', {}, 'HABITO_ELIMINADO:' + h.id_habito,\n                  'ACTUALIZAR', fila(h, { estado: 'ELIMINADO' }));\n  }\n\n  if (pantalla === 'HABITOS_ESTADO' && paso === '2') {\n    const e = { '1': 'ACTIVO', '2': 'INACTIVO' }[texto];\n    if (!e) return salida(opcionInvalida('Espero 1 (activar) o 2 (desactivar).'),\n                          'HABITOS_ESTADO', '2', d, 'OPCION_INVALIDA');\n    return salida('✅ Hábito ' + (e === 'ACTIVO' ? 'activado 🟢' : 'desactivado ⚪') + '.\\n\\n' +\n                  '🆔 ' + h.id_habito + '\\n🔁 ' + h.nombre + '\\nAntes: ' + h.estado + '\\nAhora: ' + e + '\\n\\n' + MENU,\n                  'HABITOS', '0', {}, 'HABITO_' + e + ':' + h.id_habito,\n                  'ACTUALIZAR', fila(h, { estado: e }));\n  }\n\n  if (pantalla === 'HABITOS_EDITAR' && paso === '2') {\n    const campos = { '1': 'nombre', '2': 'frecuencia', '3': 'hora_recordatorio' };\n    const c = campos[texto];\n    if (!c) return salida(opcionInvalida('Espero 1, 2 o 3.'), 'HABITOS_EDITAR', '2', d, 'OPCION_INVALIDA');\n    d.campo = c;\n    if (c === 'frecuencia')\n      return salida('📆 Elige la nueva frecuencia:\\n\\n1  Diario\\n2  Días hábiles\\n3  Semanal\\n4  Mensual\\n\\n' +\n                    '💡 Recomendado: 1 Diario\\n9 Volver', 'HABITOS_EDITAR', '3', d, 'VALOR_PEDIDO');\n    if (c === 'hora_recordatorio')\n      return salida('⏰ Escribe la nueva hora en formato HH:MM.\\n\\nEjemplo: 07:00\\n\\n' +\n                    '💡 Recomendado: 07:00\\n9 Volver', 'HABITOS_EDITAR', '3', d, 'VALOR_PEDIDO');\n    return salida('✏️ Escribe el nuevo nombre del hábito.\\n\\nActual: ' + h.nombre + '\\n\\n9 Volver',\n                  'HABITOS_EDITAR', '3', d, 'VALOR_PEDIDO');\n  }\n\n  if (pantalla === 'HABITOS_EDITAR' && paso === '3') {\n    const c = d.campo;\n    let valor = limpiar(texto);\n    if (c === 'frecuencia') {\n      valor = FRECUENCIAS[texto];\n      if (!valor) return salida(opcionInvalida('Espero 1, 2, 3 o 4.'),\n                                'HABITOS_EDITAR', '3', d, 'VALOR_INVALIDO');\n    } else if (c === 'hora_recordatorio') {\n      if (!esHoraValida(texto)) return salida('⚠️ Formato de hora incorrecto. Usa HH:MM, por ejemplo 07:00.',\n                                              'HABITOS_EDITAR', '3', d, 'VALOR_INVALIDO');\n    } else {\n      if (vacio(valor) || valor.length < 3)\n        return salida('⚠️ El nombre debe tener al menos 3 caracteres.',\n                      'HABITOS_EDITAR', '3', d, 'VALOR_INVALIDO');\n    }\n    const cambios = {}; cambios[c] = valor;\n    return salida('✅ Hábito actualizado.\\n\\n🆔 ' + h.id_habito + '\\nCampo: ' + c +\n                  '\\nAntes: ' + h[c] + '\\nAhora: ' + valor + '\\n\\n' + MENU,\n                  'HABITOS', '0', {}, 'HABITO_EDITADO:' + h.id_habito + '/' + c,\n                  'ACTUALIZAR', fila(h, cambios));\n  }\n\n  return salida(MENU, 'HABITOS', '0', {}, 'PASO_DESCONOCIDO');\n}\n\nreturn salida(MENU, 'HABITOS', '0', {}, 'PANTALLA_DESCONOCIDA');\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        896
+      ],
+      "id": "730854fc-7759-4155-9774-34e75df2663d",
+      "name": "🧠 Lógica de Hábitos"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ef131987-5a48-567d-a7b8-6b633e3b8e57",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "NINGUNA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NINGUNA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c17113fb-91c2-5128-9c66-3bcc9bfcd6e6",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "CREAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREAR"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "355d3185-6d2b-54a6-bb40-d6324c0e660c",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "ACTUALIZAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ACTUALIZAR"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": 0
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1072,
+        896
+      ],
+      "id": "4fa144e5-0697-4ad2-971b-dc4752fd019d",
+      "name": "🔀 Acción sobre HABITOS"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        736
+      ],
+      "id": "b20a1f90-34c1-48a5-8901-0bcbe7c116e3",
+      "name": "⏸️ Sin Escritura"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "HABITOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_habito": "={{ $json.fila.id_habito }}",
+            "nombre": "={{ $json.fila.nombre }}",
+            "frecuencia": "={{ $json.fila.frecuencia }}",
+            "hora_recordatorio": "={{ $json.fila.hora_recordatorio }}",
+            "estado": "={{ $json.fila.estado }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_habito",
+              "displayName": "id_habito",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "frecuencia",
+              "displayName": "frecuencia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora_recordatorio",
+              "displayName": "hora_recordatorio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1344,
+        928
+      ],
+      "id": "6df079a2-9f9f-4147-bdc8-2cbb588f2ade",
+      "name": "➕ HABITOS - Crear",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "HABITOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_habito": "={{ $json.fila.id_habito }}",
+            "nombre": "={{ $json.fila.nombre }}",
+            "frecuencia": "={{ $json.fila.frecuencia }}",
+            "hora_recordatorio": "={{ $json.fila.hora_recordatorio }}",
+            "estado": "={{ $json.fila.estado }}"
+          },
+          "matchingColumns": [
+            "id_habito"
+          ],
+          "schema": [
+            {
+              "id": "id_habito",
+              "displayName": "id_habito",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "frecuencia",
+              "displayName": "frecuencia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora_recordatorio",
+              "displayName": "hora_recordatorio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1344,
+        1104
+      ],
+      "id": "e3725eef-ee7e-4d5d-bf07-3d2b026aa4bf",
+      "name": "✏️ HABITOS - Actualizar",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('🧠 Lógica de Hábitos').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje, pantalla_nueva: r.pantalla_nueva, paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales, resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        928
+      ],
+      "id": "56d610a7-dc13-4a81-9778-76cbd37009f3",
+      "name": "📦 Salida Hábitos"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO HÁBITOS\n\n**Pantallas**: `HABITOS` · `HABITOS_NUEVO` (4 pasos) · `HABITOS_EDITAR` (3 pasos) · `HABITOS_ESTADO` (2 pasos) · `HABITOS_ELIMINAR` (2 pasos, con confirmación).\n\n**Eliminación lógica**: no se borra la fila, se marca `estado = ELIMINADO`. Así el historial nunca se pierde y los identificadores no se reutilizan.\n\n⚠️ **Limitación de diseño documentada**: la hoja `HABITOS` no tiene columna `creado_por`, así que los hábitos son compartidos por todos los usuarios. Para hacerlos privados basta añadir esa columna y filtrar igual que en `TAREAS`.",
+        "height": 460,
+        "width": 640,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        352,
+        336
+      ],
+      "id": "6dc3524d-c7a2-4e38-bd40-86f0cfc7e46e",
+      "name": "NOTA HABITOS"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Hábitos": {
+      "main": [
+        [
+          {
+            "node": "📄 HABITOS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 HABITOS - Leer": {
+      "main": [
+        [
+          {
+            "node": "🧠 Lógica de Hábitos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Lógica de Hábitos": {
+      "main": [
+        [
+          {
+            "node": "🔀 Acción sobre HABITOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Acción sobre HABITOS": {
+      "main": [
+        [
+          {
+            "node": "⏸️ Sin Escritura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "➕ HABITOS - Crear",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✏️ HABITOS - Actualizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏸️ Sin Escritura": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Hábitos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "➕ HABITOS - Crear": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Hábitos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ HABITOS - Actualizar": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Hábitos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c309de02-14a6-4139-a092-a21669d6a411",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "09iuUgD9loVpz6mf",
+  "tags": []
+}

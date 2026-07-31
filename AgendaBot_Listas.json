@@ -1,0 +1,672 @@
+{
+  "name": "AgendaBot_Listas",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        912,
+        160
+      ],
+      "id": "09814d1b-d237-436f-a4fe-f2c049ba1e63",
+      "name": "▶️ Entrada Listas"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1003,
+          "mode": "list",
+          "cachedResultName": "LISTAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1003"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1152,
+        160
+      ],
+      "id": "0fb4e37b-e98a-4a8b-9ca2-e5b3c295e7f3",
+      "name": "📄 LISTAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1004,
+          "mode": "list",
+          "cachedResultName": "ITEMS_LISTA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1004"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1392,
+        160
+      ],
+      "id": "48325c23-8ea2-4ed6-9553-4063b030e187",
+      "name": "📄 ITEMS_LISTA - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO LISTAS\n   Pantallas: LISTAS | LISTAS_NUEVA (2 pasos) | LISTAS_ABRIR (1 paso)\n              LISTAS_ITEMS (menu) | LISTAS_AGREGAR | LISTAS_COMPLETAR\n              LISTAS_ELIMINAR\n   Hojas: LISTAS(id_lista, nombre_lista, tipo, creado_por)\n          ITEMS_LISTA(id_item, id_lista, item, estado)\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Listas').first().json;\nconst listas = filasReales($('📄 LISTAS - Leer').all(), 'id_lista');\nconst items = filasReales($input.all(), 'id_item');\n\nconst texto = String(ctx.texto || '').trim();\nconst pantalla = String(ctx.pantalla_actual || 'LISTAS').toUpperCase();\nconst paso = String(ctx.paso_actual || '0');\nconst usuario = String(ctx.telegram_user);\nconst d = leerDatos(ctx.datos_parciales);\n\nconst TIPOS = { '1': 'COMPRAS', '2': 'TAREAS', '3': 'IDEAS', '4': 'OTRO' };\nconst ICONO = { 'PENDIENTE': '⬜', 'COMPLETADO': '✅', 'ELIMINADO': '🗑️' };\n\nconst MENU =\n  '📝 LISTAS\\n' +\n  'Aquí guardas listas de compras, ideas o pendientes.\\n\\n' +\n  '1  Crear lista\\n' +\n  '2  Ver mis listas\\n' +\n  '3  Abrir una lista y gestionar sus ítems\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 3 Abrir una lista\\n' +\n  'Tip: escribe únicamente el número.';\n\n/* Entrada directa desde el menu principal: se muestra el menu del modulo\n   sin consumir el numero que el usuario uso para entrar. */\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU, 'LISTAS', '0', {}, 'MENU_LISTAS');\n\n\nfunction misListas() {\n  return listas.filter(function (l) { return String(l.creado_por || '').trim() === usuario; })\n               .sort(function (a, b) { return String(a.id_lista).localeCompare(String(b.id_lista)); });\n}\nfunction itemsDe(idLista, soloVivos) {\n  return items.filter(function (i) {\n    return String(i.id_lista || '').trim() === String(idLista) &&\n           (!soloVivos || String(i.estado || '').toUpperCase() !== 'ELIMINADO');\n  });\n}\nfunction listadoListas(ls) {\n  return ls.map(function (l, i) {\n    const n = itemsDe(l.id_lista, true);\n    const p = n.filter(function (x) { return String(x.estado || '').toUpperCase() === 'PENDIENTE'; });\n    return (i + 1) + ')  ' + l.nombre_lista + '   [' + l.tipo + ']' +\n           '\\n      ' + n.length + ' ítems · ' + p.length + ' pendientes · ' + l.id_lista;\n  }).join('\\n');\n}\nfunction listadoItems(is) {\n  if (is.length === 0) return '   (esta lista todavía no tiene ítems)';\n  return is.map(function (x, i) {\n    const e = String(x.estado || '').toUpperCase();\n    return '   ' + (i + 1) + ')  ' + (ICONO[e] || '•') + ' ' + x.item + '   · ' + x.id_item;\n  }).join('\\n');\n}\nfunction menuItems(lista) {\n  const is = itemsDe(lista.id_lista, true);\n  return '📂 LISTA: ' + lista.nombre_lista + '   [' + lista.tipo + ']\\n\\n' +\n         listadoItems(is) + '\\n\\n' +\n         '1  Agregar ítem\\n' +\n         '2  Completar ítem\\n' +\n         '3  Eliminar ítem\\n' +\n         '9  Volver a Listas\\n\\n' +\n         '💡 Recomendado: 1 Agregar ítem';\n}\nfunction filaItem(x, cambios) {\n  return {\n    id_item: x.id_item,\n    id_lista: x.id_lista,\n    item: (cambios && cambios.item) || x.item,\n    estado: (cambios && cambios.estado) || x.estado\n  };\n}\n\nconst L1 = '🆕 NUEVA LISTA — Paso 1 de 2: NOMBRE\\n\\n' +\n           '¿Cómo se va a llamar la lista?\\n\\nEjemplo: Mercado del sábado\\n\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nconst L2 = '🆕 NUEVA LISTA — Paso 2 de 2: TIPO\\n\\n' +\n           '¿De qué tipo es?\\n\\n1  Compras\\n2  Tareas\\n3  Ideas\\n4  Otro\\n\\n' +\n           '💡 Recomendado: 1 Compras\\n9 Volver   ·   /cancelar Cancelar';\n\n/* ------------------------------------------------------------------ MENU */\nif (pantalla === 'LISTAS') {\n  if (texto === '1') return salida(L1, 'LISTAS_NUEVA', '1', {}, 'WIZARD_INICIADO');\n  if (texto === '2') {\n    const ls = misListas();\n    if (ls.length === 0)\n      return salida('📭 Todavía no tienes listas.\\n\\nCrea la primera con la opción 1.\\n\\n' + MENU,\n                    'LISTAS', '0', {}, 'CONSULTA_VACIA');\n    return salida('📚 TUS LISTAS (' + ls.length + ')\\n\\n' + listadoListas(ls) + '\\n\\n' + MENU,\n                  'LISTAS', '0', {}, 'CONSULTA_OK');\n  }\n  if (texto === '3') {\n    const ls = misListas();\n    if (ls.length === 0)\n      return salida('📭 No tienes listas para abrir. Crea una con la opción 1.\\n\\n' + MENU,\n                    'LISTAS', '0', {}, 'SIN_LISTAS');\n    return salida('📂 ¿Cuál lista quieres abrir?\\n\\n' + listadoListas(ls) + '\\n\\n' +\n                  'Escribe el número de la lista (1 a ' + ls.length + ').\\n\\n' +\n                  '💡 Recomendado: 1\\n9 Volver   ·   /cancelar Cancelar',\n                  'LISTAS_ABRIR', '1', { opciones: ls.map(function (l) { return l.id_lista; }) },\n                  'SELECCION_PEDIDA');\n  }\n  if (texto === '9') return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.',\n                                   'MENU', '0', {}, 'VOLVER');\n  return salida(opcionInvalida('En Listas espero 1, 2, 3 o 9.') + '\\n\\n' + MENU,\n                'LISTAS', '0', {}, 'OPCION_INVALIDA');\n}\n\n/* ------------------------------------------------------------ NUEVA LISTA */\nif (pantalla === 'LISTAS_NUEVA') {\n  if (paso === '1') {\n    if (texto === '9') return salida(MENU, 'LISTAS', '0', {}, 'VOLVER');\n    const n = limpiar(texto);\n    if (vacio(n)) return salida('⚠️ El nombre no puede quedar vacío.\\n\\n' + L1,\n                                'LISTAS_NUEVA', '1', d, 'VACIO');\n    if (n.length < 3) return salida('⚠️ Usa al menos 3 caracteres.\\n\\n' + L1,\n                                    'LISTAS_NUEVA', '1', d, 'NOMBRE_CORTO');\n    const dup = misListas().some(function (l) {\n      return String(l.nombre_lista || '').trim().toLowerCase() === n.toLowerCase();\n    });\n    if (dup) return salida('⚠️ Ya tienes una lista con ese nombre.\\n\\n' + L1,\n                           'LISTAS_NUEVA', '1', d, 'NOMBRE_DUPLICADO');\n    d.nombre = n;\n    return salida('✅ Nombre registrado: ' + d.nombre + '\\n\\n' + L2,\n                  'LISTAS_NUEVA', '2', d, 'PASO_1_OK');\n  }\n  if (paso === '2') {\n    if (texto === '9') return salida(L1, 'LISTAS_NUEVA', '1', d, 'VOLVER_PASO');\n    const t = TIPOS[texto];\n    if (!t) return salida(opcionInvalida('Para el tipo espero 1, 2, 3 o 4.') + '\\n\\n' + L2,\n                          'LISTAS_NUEVA', '2', d, 'TIPO_INVALIDO');\n    const id = siguienteId(listas, 'id_lista', 'LISTA');\n    const f = { id_lista: id, nombre_lista: d.nombre, tipo: t, creado_por: usuario };\n    return salida('🎉 Lista creada.\\n\\n🆔 ' + id + '\\n📝 ' + f.nombre_lista + '\\n🏷️ ' + t +\n                  '\\n\\nÁbrela con la opción 3 para agregarle ítems.\\n\\n' + MENU,\n                  'LISTAS', '0', {}, 'LISTA_CREADA:' + id, 'CREAR_LISTA', f);\n  }\n  return salida(L1, 'LISTAS_NUEVA', '1', {}, 'PASO_DESCONOCIDO');\n}\n\n/* ------------------------------------------------------------ ABRIR LISTA */\nif (pantalla === 'LISTAS_ABRIR') {\n  if (texto === '9') return salida(MENU, 'LISTAS', '0', {}, 'VOLVER');\n  const ids = Array.isArray(d.opciones) ? d.opciones : [];\n  const n = parseInt(texto, 10);\n  if (!/^\\d+$/.test(texto) || isNaN(n) || n < 1 || n > ids.length)\n    return salida(opcionInvalida('Escribe un número entre 1 y ' + ids.length + '.'),\n                  'LISTAS_ABRIR', '1', d, 'SELECCION_INVALIDA');\n  const l = listas.find(function (r) { return String(r.id_lista) === String(ids[n - 1]); });\n  if (!l) return salida('⚠️ No encontré esa lista.\\n\\n' + MENU, 'LISTAS', '0', {}, 'NO_ENCONTRADA');\n  return salida(menuItems(l), 'LISTAS_ITEMS', '0', { id_lista: l.id_lista }, 'LISTA_ABIERTA:' + l.id_lista);\n}\n\n/* ------------------------------------------------------- GESTION DE ITEMS */\nif (pantalla.indexOf('LISTAS_') === 0) {\n  const l = listas.find(function (r) { return String(r.id_lista) === String(d.id_lista); });\n  if (!l) return salida('⚠️ Perdí la referencia de la lista. Volvamos al inicio.\\n\\n' + MENU,\n                        'LISTAS', '0', {}, 'CONTEXTO_PERDIDO');\n\n  if (pantalla === 'LISTAS_ITEMS') {\n    if (texto === '9') return salida(MENU, 'LISTAS', '0', {}, 'VOLVER');\n    if (texto === '1')\n      return salida('➕ Escribe el ítem que quieres agregar a \"' + l.nombre_lista + '\".\\n\\n' +\n                    'Ejemplo: Leche deslactosada\\n\\n9 Volver   ·   /cancelar Cancelar',\n                    'LISTAS_AGREGAR', '1', d, 'ITEM_PEDIDO');\n    if (texto === '2' || texto === '3') {\n      const pend = itemsDe(l.id_lista, true).filter(function (x) {\n        return texto === '3' ? true : String(x.estado || '').toUpperCase() === 'PENDIENTE';\n      });\n      if (pend.length === 0)\n        return salida('📭 No hay ítems disponibles para esa acción.\\n\\n' + menuItems(l),\n                      'LISTAS_ITEMS', '0', d, 'SIN_ITEMS');\n      const verbo = texto === '2' ? 'completar' : 'eliminar';\n      const destino = texto === '2' ? 'LISTAS_COMPLETAR' : 'LISTAS_ELIMINAR';\n      const nd = Object.assign({}, d, { opciones: pend.map(function (x) { return x.id_item; }) });\n      return salida('🔧 ¿Cuál ítem quieres ' + verbo + '?\\n\\n' + listadoItems(pend) + '\\n\\n' +\n                    'Escribe el número (1 a ' + pend.length + ').\\n\\n9 Volver   ·   /cancelar Cancelar',\n                    destino, '1', nd, 'SELECCION_PEDIDA');\n    }\n    return salida(opcionInvalida('Aquí espero 1, 2, 3 o 9.') + '\\n\\n' + menuItems(l),\n                  'LISTAS_ITEMS', '0', d, 'OPCION_INVALIDA');\n  }\n\n  if (pantalla === 'LISTAS_AGREGAR') {\n    if (texto === '9') return salida(menuItems(l), 'LISTAS_ITEMS', '0', d, 'VOLVER');\n    const t = limpiar(texto);\n    if (vacio(t)) return salida('⚠️ El ítem no puede quedar vacío.\\n\\nEscribe el ítem:',\n                                'LISTAS_AGREGAR', '1', d, 'VACIO');\n    const dup = itemsDe(l.id_lista, true).some(function (x) {\n      return String(x.item || '').trim().toLowerCase() === t.toLowerCase();\n    });\n    if (dup) return salida('⚠️ Ese ítem ya está en la lista.\\n\\nEscribe otro ítem:',\n                           'LISTAS_AGREGAR', '1', d, 'ITEM_DUPLICADO');\n    const id = siguienteId(items, 'id_item', 'ITEM');\n    const f = { id_item: id, id_lista: l.id_lista, item: t, estado: 'PENDIENTE' };\n    return salida('✅ Ítem agregado: ' + t + '\\n\\n' +\n                  '(La lista de abajo se actualizará en tu próxima consulta.)\\n\\n' + menuItems(l),\n                  'LISTAS_ITEMS', '0', d, 'ITEM_CREADO:' + id, 'CREAR_ITEM', f);\n  }\n\n  if (pantalla === 'LISTAS_COMPLETAR' || pantalla === 'LISTAS_ELIMINAR') {\n    if (texto === '9') return salida(menuItems(l), 'LISTAS_ITEMS', '0', d, 'VOLVER');\n    const ids = Array.isArray(d.opciones) ? d.opciones : [];\n    const n = parseInt(texto, 10);\n    if (!/^\\d+$/.test(texto) || isNaN(n) || n < 1 || n > ids.length)\n      return salida(opcionInvalida('Escribe un número entre 1 y ' + ids.length + '.'),\n                    pantalla, '1', d, 'SELECCION_INVALIDA');\n    const x = items.find(function (r) { return String(r.id_item) === String(ids[n - 1]); });\n    if (!x) return salida('⚠️ No encontré ese ítem.\\n\\n' + menuItems(l),\n                          'LISTAS_ITEMS', '0', d, 'NO_ENCONTRADO');\n    const nuevo = pantalla === 'LISTAS_COMPLETAR' ? 'COMPLETADO' : 'ELIMINADO';\n    const verbo = nuevo === 'COMPLETADO' ? '✅ Ítem completado' : '🗑️ Ítem eliminado';\n    return salida(verbo + ': ' + x.item + '\\n\\n' + menuItems(l),\n                  'LISTAS_ITEMS', '0', d, 'ITEM_' + nuevo + ':' + x.id_item,\n                  'ACTUALIZAR_ITEM', filaItem(x, { estado: nuevo }));\n  }\n}\n\nreturn salida(MENU, 'LISTAS', '0', {}, 'PANTALLA_DESCONOCIDA');\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        160
+      ],
+      "id": "fa923c60-45c4-4be2-8182-5488152009e3",
+      "name": "🧠 Lógica de Listas"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "531bbb54-1076-5d28-aaaf-6cb5670d16da",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "NINGUNA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NINGUNA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8765c648-1fc1-5d93-b4de-cbeb743c930c",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "CREAR_LISTA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREAR_LISTA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "466d789f-6614-5c15-9f07-72c0a3e5b2b4",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "CREAR_ITEM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREAR_ITEM"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "fc97449b-c3f5-5b1b-a5bf-2cfc2a047cc0",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "ACTUALIZAR_ITEM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ACTUALIZAR_ITEM"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": 0
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1872,
+        160
+      ],
+      "id": "8904bb07-f34b-4858-b498-d155098a0e72",
+      "name": "🔀 Acción sobre LISTAS"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        -80
+      ],
+      "id": "f9de3996-fd83-4006-9261-379e6fab9490",
+      "name": "⏸️ Sin Escritura"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LISTAS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_lista": "={{ $json.fila.id_lista }}",
+            "nombre_lista": "={{ $json.fila.nombre_lista }}",
+            "tipo": "={{ $json.fila.tipo }}",
+            "creado_por": "={{ $json.fila.creado_por }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_lista",
+              "displayName": "id_lista",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre_lista",
+              "displayName": "nombre_lista",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "creado_por",
+              "displayName": "creado_por",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        112
+      ],
+      "id": "9d26b4b8-a4c4-473b-a4b6-c95a4d257b8a",
+      "name": "➕ LISTAS - Crear",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "=ITEMS_LISTA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_item": "={{ $json.fila.id_item }}",
+            "id_lista": "={{ $json.fila.id_lista }}",
+            "item": "={{ $json.fila.item }}",
+            "estado": "={{ $json.fila.estado }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_item",
+              "displayName": "id_item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "id_lista",
+              "displayName": "id_lista",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item",
+              "displayName": "item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        288
+      ],
+      "id": "2bcc9caf-3c06-4460-8615-b56c20d41f31",
+      "name": "➕ ITEMS_LISTA - Crear",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "ITEMS_LISTA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_item": "={{ $json.fila.id_item }}",
+            "id_lista": "={{ $json.fila.id_lista }}",
+            "item": "={{ $json.fila.item }}",
+            "estado": "={{ $json.fila.estado }}"
+          },
+          "matchingColumns": [
+            "id_item"
+          ],
+          "schema": [
+            {
+              "id": "id_item",
+              "displayName": "id_item",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "id_lista",
+              "displayName": "id_lista",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item",
+              "displayName": "item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        464
+      ],
+      "id": "1bc11a9d-dfc5-4047-bf58-4307395a2a1d",
+      "name": "✏️ ITEMS_LISTA - Actualizar",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('🧠 Lógica de Listas').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje, pantalla_nueva: r.pantalla_nueva, paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales, resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        160
+      ],
+      "id": "e595e779-4c14-43f6-972a-9f925741e5b3",
+      "name": "📦 Salida Listas"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO LISTAS (dos hojas relacionadas)\n\nEs el único módulo que trabaja con **dos** hojas unidas por clave:\n`LISTAS.id_lista` ←→ `ITEMS_LISTA.id_lista`.\n\nPor eso hay **dos lecturas encadenadas** antes de la lógica: la segunda conserva la primera y el Code node accede a ella con `$('📄 LISTAS - Leer').all()`.\n\nEl Switch tiene **4 salidas** porque hay dos destinos de escritura distintos (`LISTAS` e `ITEMS_LISTA`).\n\nAl abrir una lista, su `id_lista` queda guardado en `datos_parciales`, de modo que todas las operaciones siguientes saben sobre qué lista trabajan.",
+        "height": 480,
+        "width": 680,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        -416
+      ],
+      "id": "c3ed1900-7c19-4c2d-ad78-8d60d2871832",
+      "name": "NOTA LISTAS"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Listas": {
+      "main": [
+        [
+          {
+            "node": "📄 LISTAS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 LISTAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "📄 ITEMS_LISTA - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 ITEMS_LISTA - Leer": {
+      "main": [
+        [
+          {
+            "node": "🧠 Lógica de Listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Lógica de Listas": {
+      "main": [
+        [
+          {
+            "node": "🔀 Acción sobre LISTAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Acción sobre LISTAS": {
+      "main": [
+        [
+          {
+            "node": "⏸️ Sin Escritura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "➕ LISTAS - Crear",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "➕ ITEMS_LISTA - Crear",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✏️ ITEMS_LISTA - Actualizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏸️ Sin Escritura": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "➕ LISTAS - Crear": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "➕ ITEMS_LISTA - Crear": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ ITEMS_LISTA - Actualizar": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "fc459417-65d7-464f-915b-a28ce7c197bc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "RwSb5gMFC9SLaAdf",
+  "tags": []
+}

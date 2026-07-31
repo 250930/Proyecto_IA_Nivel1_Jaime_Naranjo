@@ -1,0 +1,344 @@
+{
+  "name": "AgendaBot_Reportes",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        928,
+        560
+      ],
+      "id": "cea464e5-dce2-455a-8c0c-9ce83cdadc9f",
+      "name": "▶️ Entrada Reportes"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "CITAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1152,
+        560
+      ],
+      "id": "b0b17211-8c39-4005-8fc7-71f318e32b66",
+      "name": "📄 CITAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1001,
+          "mode": "list",
+          "cachedResultName": "TAREAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1001"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1376,
+        560
+      ],
+      "id": "7dea99a6-54c4-4219-a1d1-a907ade0ae68",
+      "name": "📄 TAREAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1002,
+          "mode": "list",
+          "cachedResultName": "HABITOS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1002"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1600,
+        560
+      ],
+      "id": "b351eb76-3f64-403d-bf83-897af30949aa",
+      "name": "📄 HABITOS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1003,
+          "mode": "list",
+          "cachedResultName": "LISTAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1003"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1808,
+        560
+      ],
+      "id": "b81a98b1-6f89-4157-bd9d-87e6f458c238",
+      "name": "📄 LISTAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1004,
+          "mode": "list",
+          "cachedResultName": "ITEMS_LISTA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1004"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2032,
+        560
+      ],
+      "id": "300d09d6-0995-4df8-a1df-3b686306a3ec",
+      "name": "📄 ITEMS_LISTA - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO REPORTES (solo lectura sobre las 5 hojas de negocio)\n   Pantalla: REPORTES\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Reportes').first().json;\nconst citas = filasReales($('📄 CITAS - Leer').all(), 'id_cita');\nconst tareas = filasReales($('📄 TAREAS - Leer').all(), 'id_tarea');\nconst habitos = filasReales($('📄 HABITOS - Leer').all(), 'id_habito');\nconst listas = filasReales($('📄 LISTAS - Leer').all(), 'id_lista');\nconst items = filasReales($input.all(), 'id_item');\n\nconst texto = String(ctx.texto || '').trim();\nconst usuario = String(ctx.telegram_user);\nconst HOY = hoyISO();\n\nconst MENU =\n  '📊 REPORTES\\n' +\n  'Números claros sobre lo que tienes registrado.\\n\\n' +\n  '1  Resumen general\\n' +\n  '2  Citas por estado\\n' +\n  '3  Tareas por prioridad y estado\\n' +\n  '4  Listas e ítems\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 1 Resumen general\\n' +\n  'Tip: escribe únicamente el número.';\n\n/* Entrada directa desde el menu principal: se muestra el menu del modulo\n   sin consumir el numero que el usuario uso para entrar. */\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU, 'REPORTES', '0', {}, 'MENU_REPORTES');\n\nconst misCitas = citas.filter(function (c) { return String(c.creado_por || '').trim() === usuario; });\nconst misTareas = tareas.filter(function (t) { return String(t.creado_por || '').trim() === usuario; });\nconst misListas = listas.filter(function (l) { return String(l.creado_por || '').trim() === usuario; });\nconst idsMisListas = misListas.map(function (l) { return String(l.id_lista); });\nconst misItems = items.filter(function (i) { return idsMisListas.indexOf(String(i.id_lista)) !== -1; });\nconst habVivos = habitos.filter(function (h) { return String(h.estado || '').toUpperCase() !== 'ELIMINADO'; });\n\nfunction cuenta(arr, campo) {\n  const m = {};\n  arr.forEach(function (r) {\n    const k = String(r[campo] || 'SIN DATO').toUpperCase();\n    m[k] = (m[k] || 0) + 1;\n  });\n  return m;\n}\nfunction pintaMapa(m, total) {\n  const ks = Object.keys(m).sort();\n  if (ks.length === 0) return '   (sin registros)';\n  return ks.map(function (k) {\n    const n = m[k];\n    const pct = total > 0 ? Math.round(n * 100 / total) : 0;\n    const barra = '█'.repeat(Math.max(1, Math.round(pct / 10)));\n    return '   ' + k.padEnd(14, ' ') + String(n).padStart(3, ' ') + '  ' + barra + ' ' + pct + '%';\n  }).join('\\n');\n}\n\nif (texto === '9')\n  return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.',\n                'MENU', '0', {}, 'VOLVER');\n\nif (texto === '1' || texto === '') {\n  const activas = misCitas.filter(function (c) {\n    return ['PENDIENTE', 'REPROGRAMADA'].indexOf(String(c.estado || '').toUpperCase()) !== -1;\n  });\n  const abiertas = misTareas.filter(function (t) {\n    return ['PENDIENTE', 'EN PROGRESO'].indexOf(String(t.estado || '').toUpperCase()) !== -1;\n  });\n  const itemsPend = misItems.filter(function (i) { return String(i.estado || '').toUpperCase() === 'PENDIENTE'; });\n  const hoyCitas = activas.filter(function (c) { return String(c.fecha) === HOY; });\n  return salida('📊 RESUMEN GENERAL   ·   ' + HOY + '\\n' +\n                '════════════════════════\\n\\n' +\n                '📅 CITAS\\n' +\n                '   Total registradas: ' + misCitas.length + '\\n' +\n                '   Activas:           ' + activas.length + '\\n' +\n                '   Para hoy:          ' + hoyCitas.length + '\\n\\n' +\n                '✅ TAREAS\\n' +\n                '   Total registradas: ' + misTareas.length + '\\n' +\n                '   Abiertas:          ' + abiertas.length + '\\n\\n' +\n                '🔁 HÁBITOS\\n' +\n                '   Registrados:       ' + habVivos.length + '\\n' +\n                '   Activos:           ' + habVivos.filter(function (h) {\n                    return String(h.estado || '').toUpperCase() === 'ACTIVO'; }).length + '\\n\\n' +\n                '📝 LISTAS\\n' +\n                '   Listas:            ' + misListas.length + '\\n' +\n                '   Ítems totales:     ' + misItems.length + '\\n' +\n                '   Ítems pendientes:  ' + itemsPend.length + '\\n\\n' + MENU,\n                'REPORTES', '0', {}, 'REPORTE_GENERAL');\n}\n\nif (texto === '2') {\n  const m = cuenta(misCitas, 'estado');\n  return salida('📅 CITAS POR ESTADO   (total ' + misCitas.length + ')\\n\\n' +\n                pintaMapa(m, misCitas.length) + '\\n\\n' + MENU,\n                'REPORTES', '0', {}, 'REPORTE_CITAS');\n}\n\nif (texto === '3') {\n  return salida('✅ TAREAS   (total ' + misTareas.length + ')\\n\\n' +\n                'POR PRIORIDAD\\n' + pintaMapa(cuenta(misTareas, 'prioridad'), misTareas.length) + '\\n\\n' +\n                'POR ESTADO\\n' + pintaMapa(cuenta(misTareas, 'estado'), misTareas.length) + '\\n\\n' + MENU,\n                'REPORTES', '0', {}, 'REPORTE_TAREAS');\n}\n\nif (texto === '4') {\n  if (misListas.length === 0)\n    return salida('📭 Todavía no tienes listas registradas.\\n\\n' + MENU,\n                  'REPORTES', '0', {}, 'REPORTE_VACIO');\n  const detalle = misListas.map(function (l) {\n    const its = misItems.filter(function (i) { return String(i.id_lista) === String(l.id_lista); });\n    const p = its.filter(function (i) { return String(i.estado || '').toUpperCase() === 'PENDIENTE'; }).length;\n    const c = its.filter(function (i) { return String(i.estado || '').toUpperCase() === 'COMPLETADO'; }).length;\n    const avance = its.length > 0 ? Math.round(c * 100 / its.length) : 0;\n    return '• ' + l.nombre_lista + '  [' + l.tipo + ']\\n' +\n           '    ' + its.length + ' ítems · ' + p + ' pendientes · ' + c + ' completados · ' + avance + '% avance';\n  }).join('\\n');\n  return salida('📝 LISTAS E ÍTEMS   (' + misListas.length + ' listas)\\n\\n' + detalle + '\\n\\n' + MENU,\n                'REPORTES', '0', {}, 'REPORTE_LISTAS');\n}\n\nreturn salida(opcionInvalida('En Reportes espero 1, 2, 3, 4 o 9.') + '\\n\\n' + MENU,\n              'REPORTES', '0', {}, 'OPCION_INVALIDA');\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        560
+      ],
+      "id": "1d6c75fc-e16a-4890-9493-bc6bbbf63145",
+      "name": "🧠 Lógica de Reportes"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('🧠 Lógica de Reportes').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje, pantalla_nueva: r.pantalla_nueva, paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales, resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        560
+      ],
+      "id": "c9a4e747-1203-43ee-a6e5-03ecbae866c1",
+      "name": "📦 Salida Reportes"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO REPORTES (solo lectura)\n\nLee las **cinco hojas de negocio en cadena**. Se encadenan en lugar de leerlas en paralelo porque cada Code node puede referenciar cualquier nodo anterior con `$('nombre').all()`, y así se evita un Merge de 5 entradas.\n\nTodos los conteos se filtran por `creado_por`, de modo que cada usuario ve **sus** números y no los de los demás.\n\nLas barras (`█`) se dibujan con caracteres de texto: no hace falta ninguna librería de gráficos ni API externa.",
+        "height": 420,
+        "width": 700,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        112
+      ],
+      "id": "7d333be9-3afa-4eb3-b886-14bea40a68ac",
+      "name": "NOTA REPORTES"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Reportes": {
+      "main": [
+        [
+          {
+            "node": "📄 CITAS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 CITAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "📄 TAREAS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 TAREAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "📄 HABITOS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 HABITOS - Leer": {
+      "main": [
+        [
+          {
+            "node": "📄 LISTAS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 LISTAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "📄 ITEMS_LISTA - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 ITEMS_LISTA - Leer": {
+      "main": [
+        [
+          {
+            "node": "🧠 Lógica de Reportes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Lógica de Reportes": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Reportes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "35e650b7-7428-4626-96fe-2bac9eb39456",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "5E7cnY929zhMLS08",
+  "tags": []
+}

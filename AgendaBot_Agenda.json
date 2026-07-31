@@ -1,0 +1,617 @@
+{
+  "name": "AgendaBot_Agenda",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        768,
+        1088
+      ],
+      "id": "f82541e7-dc0a-4e2c-976d-ec0fc028f8da",
+      "name": "▶️ Entrada Agenda"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "CITAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1008,
+        1088
+      ],
+      "id": "4d4c5f2c-47c3-43a4-9b12-b89a66e9538f",
+      "name": "📄 CITAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO AGENDA\n   Pantallas que atiende:\n     AGENDA               menu del modulo\n     AGENDA_NUEVA         wizard de 6 pasos (fecha, hora, nombre, motivo,\n                          canal, resumen)\n     AGENDA_REPROGRAMAR   pasos 1..3 (elegir cita, nueva fecha, nueva hora)\n     AGENDA_CANCELAR      paso 1 (elegir cita)\n     AGENDA_COMPLETAR     paso 1 (elegir cita)\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Agenda').first().json;\nconst filas = filasReales($input.all(), 'id_cita');\n\nconst texto = String(ctx.texto || '').trim();\nconst pantalla = String(ctx.pantalla_actual || 'AGENDA').toUpperCase();\nconst paso = String(ctx.paso_actual || '0');\nconst usuario = String(ctx.telegram_user);\nconst nombreUsuario = String(ctx.nombre || 'Usuario');\nconst d = leerDatos(ctx.datos_parciales);\n\nconst CANALES = { '1': 'Presencial', '2': 'Virtual', '3': 'Llamada' };\nconst ACTIVAS = ['PENDIENTE', 'REPROGRAMADA'];\nconst MANANA = sumarDias(hoyISO(), 1);\n\nconst MENU_AGENDA =\n  '📅 AGENDA\\n' +\n  'Aquí gestionas tus citas: crearlas, consultarlas y cambiar su estado.\\n\\n' +\n  '1  Agendar nueva cita\\n' +\n  '2  Consultar agenda\\n' +\n  '3  Reprogramar cita\\n' +\n  '4  Cancelar cita\\n' +\n  '5  Completar cita\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 1 Agendar nueva cita\\n' +\n  'Tip: escribe únicamente el número.';\n\n/* Entrada directa desde el menu principal: se muestra el menu del modulo\n   sin consumir el numero que el usuario uso para entrar. */\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU_AGENDA, 'AGENDA', '0', {}, 'MENU_AGENDA');\n\n\nfunction misCitas(estados) {\n  return filas.filter(function (r) {\n    return String(r.creado_por || '').trim() === usuario &&\n           estados.indexOf(String(r.estado || '').trim().toUpperCase()) !== -1;\n  }).sort(function (a, b) {\n    return (String(a.fecha) + String(a.hora)).localeCompare(String(b.fecha) + String(b.hora));\n  });\n}\n\nfunction listado(cs) {\n  return cs.map(function (c, i) {\n    return (i + 1) + ')  ' + c.fecha + '  ' + c.hora + '   ' + c.nombre +\n           '\\n      ' + c.motivo + '  ·  ' + c.canal + '  ·  ' + c.id_cita;\n  }).join('\\n');\n}\n\nfunction hayChoque(fecha, hora, excluirId) {\n  return filas.some(function (r) {\n    return String(r.creado_por || '').trim() === usuario &&\n           String(r.fecha || '').trim() === fecha &&\n           String(r.hora || '').trim() === hora &&\n           ACTIVAS.indexOf(String(r.estado || '').trim().toUpperCase()) !== -1 &&\n           String(r.id_cita || '') !== String(excluirId || '');\n  });\n}\n\nfunction filaCompleta(c, cambios) {\n  return {\n    id_cita: c.id_cita,\n    fecha: (cambios && cambios.fecha) || c.fecha,\n    hora: (cambios && cambios.hora) || c.hora,\n    nombre: c.nombre,\n    motivo: c.motivo,\n    canal: c.canal,\n    estado: (cambios && cambios.estado) || c.estado,\n    creado_por: c.creado_por,\n    timestamp_creacion: c.timestamp_creacion\n  };\n}\n\nfunction resumenBorrador() {\n  return '📋 RESUMEN DE LA CITA\\n\\n' +\n         '📅 Fecha:   ' + d.fecha + '\\n' +\n         '⏰ Hora:    ' + d.hora + '\\n' +\n         '👤 Nombre:  ' + d.nombre + '\\n' +\n         '📝 Motivo:  ' + d.motivo + '\\n' +\n         '📡 Canal:   ' + d.canal + '\\n\\n' +\n         'Revisa que todo esté correcto.\\n\\n' +\n         '1  Confirmar y guardar\\n' +\n         '2  Editar desde el principio\\n' +\n         '3  Cancelar la cita\\n\\n' +\n         '💡 Recomendado: 1 Confirmar y guardar';\n}\n\nconst P1 = '🆕 NUEVA CITA — Paso 1 de 6: FECHA\\n\\n' +\n           '¿Para qué día quieres la cita?\\n' +\n           'Escríbela en formato AAAA-MM-DD.\\n\\n' +\n           'Ejemplo: ' + MANANA + '\\n\\n' +\n           '💡 Recomendado: ' + MANANA + ' (mañana)\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nfunction P2() {\n  return '🆕 NUEVA CITA — Paso 2 de 6: HORA\\n\\n' +\n         '📅 Fecha elegida: ' + (d.fecha || '(sin fecha)') + '\\n\\n' +\n         '¿A qué hora será la cita?\\n' +\n         'Escríbela en formato HH:MM de 24 horas.\\n\\n' +\n         'Ejemplo: 15:30\\n\\n' +\n         '💡 Recomendado: 09:00\\n' +\n         '9 Volver   ·   /cancelar Cancelar';\n}\nconst P3 = '🆕 NUEVA CITA — Paso 3 de 6: NOMBRE\\n\\n' +\n           '¿Con quién es la cita?\\n' +\n           'Escribe el nombre de la persona o de la empresa.\\n\\n' +\n           'Ejemplo: María Gómez\\n\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nconst P4 = '🆕 NUEVA CITA — Paso 4 de 6: MOTIVO\\n\\n' +\n           '¿De qué se trata la cita?\\n' +\n           'Descríbelo en pocas palabras.\\n\\n' +\n           'Ejemplo: Revisión del contrato de arrendamiento\\n\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\nconst P5 = '🆕 NUEVA CITA — Paso 5 de 6: CANAL\\n\\n' +\n           '¿Cómo se hará la cita?\\n\\n' +\n           '1  Presencial\\n' +\n           '2  Virtual\\n' +\n           '3  Llamada\\n\\n' +\n           '💡 Recomendado: 1 Presencial\\n' +\n           '9 Volver   ·   /cancelar Cancelar';\n\n/* ------------------------------------------------------- MENU DEL MODULO */\nif (pantalla === 'AGENDA') {\n  if (texto === '1') {\n    return salida(P1, 'AGENDA_NUEVA', '1', {}, 'WIZARD_INICIADO');\n  }\n  if (texto === '2') {\n    const cs = misCitas(ACTIVAS);\n    if (cs.length === 0) {\n      return salida('📭 No tienes citas activas por ahora.\\n\\n' +\n                    'Cuando agendes una, aparecerá aquí.\\n\\n' + MENU_AGENDA,\n                    'AGENDA', '0', {}, 'CONSULTA_VACIA');\n    }\n    return salida('📆 TUS PRÓXIMAS CITAS (' + cs.length + ')\\n\\n' +\n                  listado(cs.slice(0, 15)) +\n                  (cs.length > 15 ? '\\n\\n… y ' + (cs.length - 15) + ' más.' : '') +\n                  '\\n\\n' + MENU_AGENDA,\n                  'AGENDA', '0', {}, 'CONSULTA_OK');\n  }\n  if (texto === '3' || texto === '4' || texto === '5') {\n    const cs = misCitas(texto === '5' ? ACTIVAS : ACTIVAS);\n    const acciones = { '3': ['AGENDA_REPROGRAMAR', 'reprogramar'],\n                       '4': ['AGENDA_CANCELAR', 'cancelar'],\n                       '5': ['AGENDA_COMPLETAR', 'marcar como completada'] };\n    const a = acciones[texto];\n    if (cs.length === 0) {\n      return salida('📭 No tienes citas activas que puedas ' + a[1] + '.\\n\\n' + MENU_AGENDA,\n                    'AGENDA', '0', {}, 'SIN_CITAS');\n    }\n    const nd = { opciones: cs.map(function (c) { return c.id_cita; }) };\n    return salida('🔧 ¿Cuál cita quieres ' + a[1] + '?\\n\\n' +\n                  listado(cs) + '\\n\\n' +\n                  'Escribe el número de la cita (1 a ' + cs.length + ').\\n\\n' +\n                  '💡 Recomendado: 1 (la más próxima)\\n' +\n                  '9 Volver   ·   /cancelar Cancelar',\n                  a[0], '1', nd, 'SELECCION_PEDIDA');\n  }\n  if (texto === '9') {\n    return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo de nuevo.',\n                  'MENU', '0', {}, 'VOLVER');\n  }\n  return salida(opcionInvalida('En Agenda espero un número del 1 al 5, o 9 para volver.') +\n                '\\n\\n' + MENU_AGENDA, 'AGENDA', '0', {}, 'OPCION_INVALIDA');\n}\n\n/* ---------------------------------------------------- WIZARD NUEVA CITA */\nif (pantalla === 'AGENDA_NUEVA') {\n\n  if (paso === '1') {\n    if (texto === '9') return salida(MENU_AGENDA, 'AGENDA', '0', {}, 'VOLVER');\n    if (vacio(texto)) return salida('⚠️ La fecha no puede quedar vacía.\\n\\n' + P1,\n                                    'AGENDA_NUEVA', '1', d, 'VACIO');\n    if (!esFechaValida(texto))\n      return salida('⚠️ Esa fecha no tiene el formato correcto.\\n' +\n                    'Debe ser AAAA-MM-DD, por ejemplo ' + MANANA + '.\\n\\n' + P1,\n                    'AGENDA_NUEVA', '1', d, 'FECHA_INVALIDA');\n    if (texto < hoyISO())\n      return salida('⚠️ No puedo agendar citas en el pasado.\\n' +\n                    'Hoy es ' + hoyISO() + '. Elige esa fecha o una posterior.\\n\\n' + P1,\n                    'AGENDA_NUEVA', '1', d, 'FECHA_PASADA');\n    d.fecha = texto;\n    return salida('✅ Fecha registrada: ' + d.fecha + '\\n\\n' + P2(),\n                  'AGENDA_NUEVA', '2', d, 'PASO_1_OK');\n  }\n\n  if (paso === '2') {\n    if (texto === '9') return salida(P1, 'AGENDA_NUEVA', '1', d, 'VOLVER_PASO');\n    if (vacio(texto)) return salida('⚠️ La hora no puede quedar vacía.\\n\\n' + P2(),\n                                    'AGENDA_NUEVA', '2', d, 'VACIO');\n    if (!esHoraValida(texto))\n      return salida('⚠️ Esa hora no tiene el formato correcto.\\n' +\n                    'Debe ser HH:MM en formato de 24 horas, por ejemplo 15:30.\\n\\n' + P2(),\n                    'AGENDA_NUEVA', '2', d, 'HORA_INVALIDA');\n    if (esPasado(d.fecha, texto))\n      return salida('⚠️ Esa hora ya pasó.\\n' +\n                    'Ahora son las ' + horaActual() + ' del ' + hoyISO() + '.\\n' +\n                    'Elige una hora posterior.\\n\\n' + P2(),\n                    'AGENDA_NUEVA', '2', d, 'HORA_PASADA');\n    if (hayChoque(d.fecha, texto))\n      return salida('⛔ Ya tienes una cita activa el ' + d.fecha + ' a las ' + texto + '.\\n' +\n                    'No puedo reservar dos citas a la misma hora.\\n' +\n                    'Elige otra hora, o vuelve con 9 y cancela la cita anterior.\\n\\n' + P2(),\n                    'AGENDA_NUEVA', '2', d, 'DOBLE_RESERVA');\n    d.hora = texto;\n    return salida('✅ Hora registrada: ' + d.hora + '\\n\\n' + P3,\n                  'AGENDA_NUEVA', '3', d, 'PASO_2_OK');\n  }\n\n  if (paso === '3') {\n    if (texto === '9') return salida(P2(), 'AGENDA_NUEVA', '2', d, 'VOLVER_PASO');\n    const n = limpiar(texto);\n    if (vacio(n)) return salida('⚠️ El nombre no puede quedar vacío.\\n\\n' + P3,\n                                'AGENDA_NUEVA', '3', d, 'VACIO');\n    if (n.length < 2) return salida('⚠️ Ese nombre es demasiado corto.\\n' +\n                                    'Escribe al menos 2 caracteres.\\n\\n' + P3,\n                                    'AGENDA_NUEVA', '3', d, 'NOMBRE_CORTO');\n    d.nombre = n;\n    return salida('✅ Nombre registrado: ' + d.nombre + '\\n\\n' + P4,\n                  'AGENDA_NUEVA', '4', d, 'PASO_3_OK');\n  }\n\n  if (paso === '4') {\n    if (texto === '9') return salida(P3, 'AGENDA_NUEVA', '3', d, 'VOLVER_PASO');\n    const m = limpiar(texto);\n    if (vacio(m)) return salida('⚠️ El motivo no puede quedar vacío.\\n\\n' + P4,\n                                'AGENDA_NUEVA', '4', d, 'VACIO');\n    if (m.length < 3) return salida('⚠️ Ese motivo es demasiado corto.\\n' +\n                                    'Descríbelo con al menos 3 caracteres.\\n\\n' + P4,\n                                    'AGENDA_NUEVA', '4', d, 'MOTIVO_CORTO');\n    d.motivo = m;\n    return salida('✅ Motivo registrado: ' + d.motivo + '\\n\\n' + P5,\n                  'AGENDA_NUEVA', '5', d, 'PASO_4_OK');\n  }\n\n  if (paso === '5') {\n    if (texto === '9') return salida(P4, 'AGENDA_NUEVA', '4', d, 'VOLVER_PASO');\n    const canal = CANALES[texto];\n    if (!canal) return salida(opcionInvalida('Para el canal espero 1, 2 o 3.') + '\\n\\n' + P5,\n                              'AGENDA_NUEVA', '5', d, 'CANAL_INVALIDO');\n    d.canal = canal;\n    return salida('✅ Canal registrado: ' + d.canal + '\\n\\n' + resumenBorrador(),\n                  'AGENDA_NUEVA', '6', d, 'PASO_5_OK');\n  }\n\n  if (paso === '6') {\n    if (texto === '2' || texto === '9')\n      return salida('✏️ De acuerdo, empecemos de nuevo.\\n\\n' + P1,\n                    'AGENDA_NUEVA', '1', {}, 'EDITAR');\n    if (texto === '3')\n      return salida('🗑️ Descarté la cita. No guardé nada.\\n\\n' + MENU_AGENDA,\n                    'AGENDA', '0', {}, 'CANCELADO');\n    if (texto !== '1')\n      return salida(opcionInvalida('Aquí espero 1 (confirmar), 2 (editar) o 3 (cancelar).') +\n                    '\\n\\n' + resumenBorrador(), 'AGENDA_NUEVA', '6', d, 'OPCION_INVALIDA');\n\n    /* --- validacion final antes de escribir en Google Sheets --- */\n    if (!d.fecha || !d.hora || !d.nombre || !d.motivo || !d.canal)\n      return salida('⚠️ Faltan datos para guardar la cita.\\n' +\n                    'Vamos a repetir el proceso desde el principio.\\n\\n' + P1,\n                    'AGENDA_NUEVA', '1', {}, 'DATOS_INCOMPLETOS');\n    if (esPasado(d.fecha, d.hora))\n      return salida('⚠️ Mientras completabas los datos, esa hora ya pasó.\\n' +\n                    'Elige una nueva fecha.\\n\\n' + P1,\n                    'AGENDA_NUEVA', '1', {}, 'FECHA_PASADA');\n    if (hayChoque(d.fecha, d.hora))\n      return salida('⛔ Justo ahora ya existe otra cita activa el ' + d.fecha +\n                    ' a las ' + d.hora + '.\\nElige otra hora.\\n\\n' + P2(),\n                    'AGENDA_NUEVA', '2', d, 'DOBLE_RESERVA');\n\n    const nuevoId = siguienteId(filas, 'id_cita', 'CITA');\n    const fila = {\n      id_cita: nuevoId,\n      fecha: d.fecha,\n      hora: d.hora,\n      nombre: d.nombre,\n      motivo: d.motivo,\n      canal: d.canal,\n      estado: 'PENDIENTE',\n      creado_por: usuario,\n      timestamp_creacion: timestampCO()\n    };\n    const msg = '🎉 ¡Listo, ' + nombreUsuario + '! Tu cita quedó agendada.\\n\\n' +\n                '🆔 Código:  ' + nuevoId + '\\n' +\n                '📅 Fecha:   ' + fila.fecha + '\\n' +\n                '⏰ Hora:    ' + fila.hora + '\\n' +\n                '👤 Nombre:  ' + fila.nombre + '\\n' +\n                '📝 Motivo:  ' + fila.motivo + '\\n' +\n                '📡 Canal:   ' + fila.canal + '\\n' +\n                '🔖 Estado:  PENDIENTE\\n\\n' +\n                'Te avisaré cuando se acerque la hora.\\n\\n' + MENU_AGENDA;\n    return salida(msg, 'AGENDA', '0', {}, 'CITA_CREADA:' + nuevoId, 'CREAR', fila);\n  }\n\n  return salida('🔄 Reinicio el asistente de citas para evitar confusiones.\\n\\n' + P1,\n                'AGENDA_NUEVA', '1', {}, 'PASO_DESCONOCIDO');\n}\n\n/* ------------------------------------- REPROGRAMAR / CANCELAR / COMPLETAR */\nif (pantalla === 'AGENDA_REPROGRAMAR' || pantalla === 'AGENDA_CANCELAR' || pantalla === 'AGENDA_COMPLETAR') {\n\n  if (texto === '9' && paso === '1')\n    return salida(MENU_AGENDA, 'AGENDA', '0', {}, 'VOLVER');\n\n  const ids = Array.isArray(d.opciones) ? d.opciones : [];\n\n  if (paso === '1') {\n    const n = parseInt(texto, 10);\n    if (!/^\\d+$/.test(texto) || isNaN(n) || n < 1 || n > ids.length)\n      return salida(opcionInvalida('Escribe un número entre 1 y ' + ids.length + '.'),\n                    pantalla, '1', d, 'SELECCION_INVALIDA');\n\n    const idSel = ids[n - 1];\n    const cita = filas.find(function (r) { return String(r.id_cita) === String(idSel); });\n    if (!cita)\n      return salida('⚠️ No encontré esa cita. Es posible que haya cambiado.\\n\\n' + MENU_AGENDA,\n                    'AGENDA', '0', {}, 'CITA_NO_ENCONTRADA');\n\n    if (pantalla === 'AGENDA_CANCELAR') {\n      const fila = filaCompleta(cita, { estado: 'CANCELADA' });\n      return salida('🗑️ Cita cancelada correctamente.\\n\\n' +\n                    '🆔 ' + cita.id_cita + '\\n📅 ' + cita.fecha + '  ⏰ ' + cita.hora + '\\n' +\n                    '👤 ' + cita.nombre + '\\n🔖 Estado: CANCELADA\\n\\n' +\n                    'Esa franja horaria vuelve a quedar libre.\\n\\n' + MENU_AGENDA,\n                    'AGENDA', '0', {}, 'CITA_CANCELADA:' + cita.id_cita, 'ACTUALIZAR', fila);\n    }\n    if (pantalla === 'AGENDA_COMPLETAR') {\n      const fila = filaCompleta(cita, { estado: 'COMPLETADA' });\n      return salida('✅ Cita marcada como completada. ¡Bien hecho!\\n\\n' +\n                    '🆔 ' + cita.id_cita + '\\n📅 ' + cita.fecha + '  ⏰ ' + cita.hora + '\\n' +\n                    '👤 ' + cita.nombre + '\\n🔖 Estado: COMPLETADA\\n\\n' + MENU_AGENDA,\n                    'AGENDA', '0', {}, 'CITA_COMPLETADA:' + cita.id_cita, 'ACTUALIZAR', fila);\n    }\n    d.id_cita = cita.id_cita;\n    d.fecha_actual = cita.fecha;\n    d.hora_actual = cita.hora;\n    return salida('🔄 REPROGRAMAR — Paso 1 de 2: NUEVA FECHA\\n\\n' +\n                  'Cita elegida: ' + cita.id_cita + ' · ' + cita.nombre + '\\n' +\n                  'Actualmente está para el ' + cita.fecha + ' a las ' + cita.hora + '.\\n\\n' +\n                  '¿Para qué día la movemos?\\n' +\n                  'Formato AAAA-MM-DD. Ejemplo: ' + MANANA + '\\n\\n' +\n                  '💡 Recomendado: ' + MANANA + '\\n' +\n                  '9 Volver   ·   /cancelar Cancelar',\n                  'AGENDA_REPROGRAMAR', '2', d, 'REPROGRAMAR_FECHA');\n  }\n\n  if (pantalla === 'AGENDA_REPROGRAMAR' && paso === '2') {\n    if (texto === '9') return salida(MENU_AGENDA, 'AGENDA', '0', {}, 'VOLVER');\n    if (!esFechaValida(texto))\n      return salida('⚠️ Formato de fecha incorrecto. Debe ser AAAA-MM-DD, ' +\n                    'por ejemplo ' + MANANA + '.\\n\\nEscribe la nueva fecha:',\n                    'AGENDA_REPROGRAMAR', '2', d, 'FECHA_INVALIDA');\n    if (texto < hoyISO())\n      return salida('⚠️ No puedo mover la cita al pasado. Hoy es ' + hoyISO() + '.\\n\\n' +\n                    'Escribe la nueva fecha:', 'AGENDA_REPROGRAMAR', '2', d, 'FECHA_PASADA');\n    d.nueva_fecha = texto;\n    return salida('🔄 REPROGRAMAR — Paso 2 de 2: NUEVA HORA\\n\\n' +\n                  'Nueva fecha: ' + d.nueva_fecha + '\\n\\n' +\n                  '¿A qué hora? Formato HH:MM de 24 horas. Ejemplo: 15:30\\n\\n' +\n                  '💡 Recomendado: ' + (d.hora_actual || '09:00') + ' (la misma de antes)\\n' +\n                  '9 Volver   ·   /cancelar Cancelar',\n                  'AGENDA_REPROGRAMAR', '3', d, 'REPROGRAMAR_HORA');\n  }\n\n  if (pantalla === 'AGENDA_REPROGRAMAR' && paso === '3') {\n    if (texto === '9') return salida(MENU_AGENDA, 'AGENDA', '0', {}, 'VOLVER');\n    if (!esHoraValida(texto))\n      return salida('⚠️ Formato de hora incorrecto. Debe ser HH:MM, por ejemplo 15:30.\\n\\n' +\n                    'Escribe la nueva hora:', 'AGENDA_REPROGRAMAR', '3', d, 'HORA_INVALIDA');\n    if (esPasado(d.nueva_fecha, texto))\n      return salida('⚠️ Esa hora ya pasó. Ahora son las ' + horaActual() + '.\\n\\n' +\n                    'Escribe la nueva hora:', 'AGENDA_REPROGRAMAR', '3', d, 'HORA_PASADA');\n    if (hayChoque(d.nueva_fecha, texto, d.id_cita))\n      return salida('⛔ Ya tienes otra cita activa el ' + d.nueva_fecha + ' a las ' + texto + '.\\n\\n' +\n                    'Escribe otra hora:', 'AGENDA_REPROGRAMAR', '3', d, 'DOBLE_RESERVA');\n\n    const cita = filas.find(function (r) { return String(r.id_cita) === String(d.id_cita); });\n    if (!cita)\n      return salida('⚠️ No encontré la cita original.\\n\\n' + MENU_AGENDA,\n                    'AGENDA', '0', {}, 'CITA_NO_ENCONTRADA');\n\n    const fila = filaCompleta(cita, { fecha: d.nueva_fecha, hora: texto, estado: 'REPROGRAMADA' });\n    return salida('🔄 Cita reprogramada correctamente.\\n\\n' +\n                  '🆔 ' + cita.id_cita + '\\n' +\n                  '👤 ' + cita.nombre + '\\n' +\n                  'Antes:   ' + cita.fecha + '  ' + cita.hora + '\\n' +\n                  'Ahora:   ' + fila.fecha + '  ' + fila.hora + '\\n' +\n                  '🔖 Estado: REPROGRAMADA\\n\\n' + MENU_AGENDA,\n                  'AGENDA', '0', {}, 'CITA_REPROGRAMADA:' + cita.id_cita, 'ACTUALIZAR', fila);\n  }\n\n  return salida(MENU_AGENDA, 'AGENDA', '0', {}, 'PASO_DESCONOCIDO');\n}\n\n/* -------------------------------------------------------------- fallback */\nreturn salida(MENU_AGENDA, 'AGENDA', '0', {}, 'PANTALLA_DESCONOCIDA');\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        1088
+      ],
+      "id": "9695b5b2-125c-4eb3-be97-0b4fb3c305e6",
+      "name": "🧠 Lógica de Agenda"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f189f71d-5ca3-5308-8084-9f52af730816",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "NINGUNA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NINGUNA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "718ed737-5af4-5136-b4c9-df7deef7c9cc",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "CREAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREAR"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "588f3fa0-c9e3-53cc-ad58-5b872e64d73e",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "ACTUALIZAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ACTUALIZAR"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": 0
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1488,
+        1088
+      ],
+      "id": "57fcf0db-8bc5-4e60-afb0-01f4894e117c",
+      "name": "🔀 Acción sobre CITAS"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        928
+      ],
+      "id": "ca96ada3-063e-4211-974c-99b294a90630",
+      "name": "⏸️ Sin Escritura"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CITAS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_cita": "={{ $json.fila.id_cita }}",
+            "fecha": "={{ $json.fila.fecha }}",
+            "hora": "={{ $json.fila.hora }}",
+            "nombre": "={{ $json.fila.nombre }}",
+            "motivo": "={{ $json.fila.motivo }}",
+            "canal": "={{ $json.fila.canal }}",
+            "estado": "={{ $json.fila.estado }}",
+            "creado_por": "={{ $json.fila.creado_por }}",
+            "timestamp_creacion": "={{ $json.fila.timestamp_creacion }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "canal",
+              "displayName": "canal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "creado_por",
+              "displayName": "creado_por",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timestamp_creacion",
+              "displayName": "timestamp_creacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        1120
+      ],
+      "id": "92543c47-7831-4206-8b5a-1dfae5e7aa10",
+      "name": "➕ CITAS - Crear",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CITAS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_cita": "={{ $json.fila.id_cita }}",
+            "fecha": "={{ $json.fila.fecha }}",
+            "hora": "={{ $json.fila.hora }}",
+            "nombre": "={{ $json.fila.nombre }}",
+            "motivo": "={{ $json.fila.motivo }}",
+            "canal": "={{ $json.fila.canal }}",
+            "estado": "={{ $json.fila.estado }}",
+            "creado_por": "={{ $json.fila.creado_por }}",
+            "timestamp_creacion": "={{ $json.fila.timestamp_creacion }}"
+          },
+          "matchingColumns": [
+            "id_cita"
+          ],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "canal",
+              "displayName": "canal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "creado_por",
+              "displayName": "creado_por",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timestamp_creacion",
+              "displayName": "timestamp_creacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        1296
+      ],
+      "id": "9be7fe21-aca1-4c09-b588-cfc05c7d2e7f",
+      "name": "✏️ CITAS - Actualizar",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* Devuelve a AgendaBot_Main el contrato estandar, sin importar si hubo o no\n   escritura en Google Sheets. */\nconst r = $('🧠 Lógica de Agenda').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje,\n  pantalla_nueva: r.pantalla_nueva,\n  paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales,\n  resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        1120
+      ],
+      "id": "1ad78031-8c01-4112-8538-d62770ca230c",
+      "name": "📦 Salida Agenda"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO AGENDA\n\n**Pantallas que atiende**\n- `AGENDA` — menú (1 nueva · 2 consultar · 3 reprogramar · 4 cancelar · 5 completar · 9 volver)\n- `AGENDA_NUEVA` — wizard de **6 pasos**\n- `AGENDA_REPROGRAMAR` — 3 pasos\n- `AGENDA_CANCELAR` / `AGENDA_COMPLETAR` — 1 paso\n\n**Validaciones**: formato de fecha `AAAA-MM-DD`, formato de hora `HH:MM`, fecha y hora no pasadas, campos no vacíos, longitud mínima de nombre y motivo, opciones numéricas válidas y **doble reserva** (misma fecha + hora + usuario, en citas activas).\n\nEl estado del wizard **no vive en n8n**: vive en `SESSIONS.datos_parciales` como JSON. Por eso el bot puede retomar la conversación aunque n8n se reinicie.",
+        "height": 480,
+        "width": 640,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        768,
+        528
+      ],
+      "id": "d08d1f11-63fa-4a94-80fb-cbaaa036b8b0",
+      "name": "NOTA AGENDA"
+    },
+    {
+      "parameters": {
+        "content": "## ESCRITURA EN GOOGLE SHEETS\n\nEl nodo de lógica no escribe: **decide**. Devuelve `accion`:\n\n- `NINGUNA` → solo se responde texto (menús, errores, pasos intermedios).\n- `CREAR` → *append* de una fila nueva en `CITAS`.\n- `ACTUALIZAR` → *update* buscando por `id_cita`.\n\nSeparar **decisión** de **escritura** permite que las validaciones se prueben sin tocar la hoja y evita escrituras a medias.\n\nEl id se genera con `siguienteId()`: busca el número más alto ya existente y devuelve `CITA-001`, `CITA-002`, …",
+        "height": 440,
+        "width": 620,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1488,
+        528
+      ],
+      "id": "7c191f03-5264-4f31-b891-4523b68ef670",
+      "name": "NOTA ESCRITURA"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Agenda": {
+      "main": [
+        [
+          {
+            "node": "📄 CITAS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 CITAS - Leer": {
+      "main": [
+        [
+          {
+            "node": "🧠 Lógica de Agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Lógica de Agenda": {
+      "main": [
+        [
+          {
+            "node": "🔀 Acción sobre CITAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Acción sobre CITAS": {
+      "main": [
+        [
+          {
+            "node": "⏸️ Sin Escritura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "➕ CITAS - Crear",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✏️ CITAS - Actualizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏸️ Sin Escritura": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "➕ CITAS - Crear": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ CITAS - Actualizar": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "680fac24-b4c8-4d90-bd42-6b5faafc8e0e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "j1tAFC6ML58B3FiG",
+  "tags": []
+}

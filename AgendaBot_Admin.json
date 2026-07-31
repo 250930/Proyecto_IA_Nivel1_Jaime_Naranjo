@@ -1,0 +1,406 @@
+{
+  "name": "AgendaBot_Admin",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        928,
+        368
+      ],
+      "id": "573c13bb-d4bf-4fb2-87ea-e46dd1136b8c",
+      "name": "▶️ Entrada Admin"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1003,
+          "mode": "list",
+          "cachedResultName": "LISTAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1003"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1168,
+        368
+      ],
+      "id": "bac48521-797d-48ba-b5f3-276e442cacb0",
+      "name": "📄 USUARIOS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1006,
+          "mode": "list",
+          "cachedResultName": "LOGS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1006"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1408,
+        368
+      ],
+      "id": "7608be02-6a1a-484b-81e7-864ca72e39b1",
+      "name": "📄 LOGS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO ADMINISTRADOR  (exclusivo rol ADMIN; el Router ya lo verifica,\n   pero aqui se vuelve a comprobar como segunda barrera de seguridad)\n   Pantallas: ADMIN | ADMIN_ACTIVAR | ADMIN_DESACTIVAR | ADMIN_ROL\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Admin').first().json;\nconst usuarios = filasReales($('📄 USUARIOS - Leer').all(), 'telegram_user');\nconst logs = filasReales($input.all(), 'timestamp');\n\nconst texto = String(ctx.texto || '').trim();\nconst pantalla = String(ctx.pantalla_actual || 'ADMIN').toUpperCase();\nconst paso = String(ctx.paso_actual || '0');\nconst rol = String(ctx.rol || 'USER').toUpperCase();\nconst yo = String(ctx.telegram_user);\nconst d = leerDatos(ctx.datos_parciales);\n\n/* --- segunda barrera de permisos --- */\nif (rol !== 'ADMIN')\n  return salida('🔒 Esta sección es exclusiva del rol ADMIN.\\n' +\n                'Tu rol actual es ' + rol + '.\\n\\nEscribe /menu para volver.',\n                'MENU', '0', {}, 'SIN_PERMISO_ADMIN');\n\nconst MENU =\n  '🛡️ ADMINISTRADOR\\n' +\n  'Gestión de usuarios y auditoría del sistema.\\n\\n' +\n  '1  Consultar usuarios\\n' +\n  '2  Consultar logs recientes\\n' +\n  '3  Activar usuario\\n' +\n  '4  Desactivar usuario\\n' +\n  '5  Cambiar rol de un usuario\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 1 Consultar usuarios\\n' +\n  'Tip: escribe únicamente el número.';\n\n/* Entrada directa desde el menu principal: se muestra el menu del modulo\n   sin consumir el numero que el usuario uso para entrar. */\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU, 'ADMIN', '0', {}, 'MENU_ADMIN');\n\nfunction listadoUsuarios(us) {\n  return us.map(function (u, i) {\n    const ok = esVerdadero(u.permitido);\n    return (i + 1) + ')  ' + (ok ? '🟢' : '🔴') + ' ' + (u.nombre || '(sin nombre)') +\n           '\\n      🆔 ' + u.telegram_user + '  ·  🔑 ' + (u.rol || 'USER') +\n           '  ·  ' + (ok ? 'HABILITADO' : 'BLOQUEADO');\n  }).join('\\n');\n}\nfunction fila(u, cambios) {\n  return {\n    telegram_user: String(u.telegram_user),\n    nombre: (cambios && cambios.nombre) || u.nombre,\n    rol: (cambios && cambios.rol) || u.rol,\n    permitido: (cambios && cambios.permitido) || u.permitido\n  };\n}\nfunction pedirUsuario(us, verbo, destino) {\n  if (us.length === 0)\n    return salida('📭 No hay usuarios que cumplan esa condición.\\n\\n' + MENU,\n                  'ADMIN', '0', {}, 'SIN_USUARIOS');\n  return salida('🔧 ¿A qué usuario quieres ' + verbo + '?\\n\\n' + listadoUsuarios(us) + '\\n\\n' +\n                'Escribe el número (1 a ' + us.length + ').\\n\\n9 Volver   ·   /cancelar Cancelar',\n                destino, '1', { opciones: us.map(function (u) { return String(u.telegram_user); }) },\n                'SELECCION_PEDIDA');\n}\n\n/* ------------------------------------------------------------------ MENU */\nif (pantalla === 'ADMIN') {\n  if (texto === '1') {\n    const act = usuarios.filter(function (u) { return esVerdadero(u.permitido); }).length;\n    const adm = usuarios.filter(function (u) { return String(u.rol || '').toUpperCase() === 'ADMIN'; }).length;\n    return salida('👥 USUARIOS REGISTRADOS (' + usuarios.length + ')\\n' +\n                  '🟢 Habilitados: ' + act + '   🔴 Bloqueados: ' + (usuarios.length - act) +\n                  '   🔑 Admins: ' + adm + '\\n\\n' +\n                  (usuarios.length ? listadoUsuarios(usuarios.slice(0, 25)) : '   (sin registros)') +\n                  '\\n\\n' + MENU, 'ADMIN', '0', {}, 'CONSULTA_USUARIOS');\n  }\n  if (texto === '2') {\n    const ult = logs.slice(-20).reverse();\n    if (ult.length === 0)\n      return salida('📭 Todavía no hay movimientos registrados en LOGS.\\n\\n' + MENU,\n                    'ADMIN', '0', {}, 'LOGS_VACIOS');\n    const txt = ult.map(function (l) {\n      return '• ' + l.timestamp + '\\n   👤 ' + l.telegram_user + '  📺 ' + l.pantalla +\n             '\\n   ⌨️ \"' + String(l.opcion_elegida || '').slice(0, 30) + '\"  →  ' + l.resultado;\n    }).join('\\n');\n    return salida('📜 ÚLTIMOS ' + ult.length + ' MOVIMIENTOS\\n(total histórico: ' + logs.length + ')\\n\\n' +\n                  txt + '\\n\\n' + MENU, 'ADMIN', '0', {}, 'CONSULTA_LOGS');\n  }\n  if (texto === '3')\n    return pedirUsuario(usuarios.filter(function (u) { return !esVerdadero(u.permitido); }),\n                        'activar', 'ADMIN_ACTIVAR');\n  if (texto === '4')\n    return pedirUsuario(usuarios.filter(function (u) {\n      return esVerdadero(u.permitido) && String(u.telegram_user) !== yo;\n    }), 'desactivar', 'ADMIN_DESACTIVAR');\n  if (texto === '5')\n    return pedirUsuario(usuarios, 'cambiarle el rol', 'ADMIN_ROL');\n  if (texto === '9')\n    return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.',\n                  'MENU', '0', {}, 'VOLVER');\n  return salida(opcionInvalida('En Administrador espero un número del 1 al 5, o 9.') + '\\n\\n' + MENU,\n                'ADMIN', '0', {}, 'OPCION_INVALIDA');\n}\n\n/* ---------------------------------------------------- ACCIONES SOBRE USER */\nif (pantalla === 'ADMIN_ACTIVAR' || pantalla === 'ADMIN_DESACTIVAR' || pantalla === 'ADMIN_ROL') {\n  if (texto === '9') return salida(MENU, 'ADMIN', '0', {}, 'VOLVER');\n  const ids = Array.isArray(d.opciones) ? d.opciones : [];\n\n  if (paso === '1') {\n    const n = parseInt(texto, 10);\n    if (!/^\\d+$/.test(texto) || isNaN(n) || n < 1 || n > ids.length)\n      return salida(opcionInvalida('Escribe un número entre 1 y ' + ids.length + '.'),\n                    pantalla, '1', d, 'SELECCION_INVALIDA');\n    const u = usuarios.find(function (r) { return String(r.telegram_user) === String(ids[n - 1]); });\n    if (!u) return salida('⚠️ No encontré ese usuario.\\n\\n' + MENU, 'ADMIN', '0', {}, 'NO_ENCONTRADO');\n\n    if (pantalla === 'ADMIN_ROL') {\n      d.telegram_user = String(u.telegram_user);\n      return salida('🔑 Usuario: ' + (u.nombre || u.telegram_user) + '\\nRol actual: ' + u.rol + '\\n\\n' +\n                    '¿Qué rol le asigno?\\n\\n1  USER   (acceso normal)\\n2  ADMIN  (acceso total)\\n\\n' +\n                    '💡 Recomendado: 1 USER\\n9 Volver   ·   /cancelar Cancelar',\n                    'ADMIN_ROL', '2', d, 'ROL_PEDIDO');\n    }\n    if (pantalla === 'ADMIN_DESACTIVAR' && String(u.telegram_user) === yo)\n      return salida('⚠️ No puedes desactivarte a ti mismo.\\n' +\n                    'Si lo hicieras, perderías el acceso al bot.\\n\\n' + MENU,\n                    'ADMIN', '0', {}, 'AUTOBLOQUEO_EVITADO');\n\n    const activar = (pantalla === 'ADMIN_ACTIVAR');\n    return salida((activar ? '🟢 Usuario habilitado.' : '🔴 Usuario bloqueado.') + '\\n\\n' +\n                  '👤 ' + (u.nombre || '(sin nombre)') + '\\n🆔 ' + u.telegram_user +\n                  '\\n🔑 ' + u.rol + '\\n✅ Permitido: ' + (activar ? 'TRUE' : 'FALSE') + '\\n\\n' + MENU,\n                  'ADMIN', '0', {},\n                  (activar ? 'USUARIO_ACTIVADO:' : 'USUARIO_DESACTIVADO:') + u.telegram_user,\n                  'ACTUALIZAR', fila(u, { permitido: activar ? 'TRUE' : 'FALSE' }));\n  }\n\n  if (pantalla === 'ADMIN_ROL' && paso === '2') {\n    const r = { '1': 'USER', '2': 'ADMIN' }[texto];\n    if (!r) return salida(opcionInvalida('Espero 1 (USER) o 2 (ADMIN).'),\n                          'ADMIN_ROL', '2', d, 'OPCION_INVALIDA');\n    const u = usuarios.find(function (x) { return String(x.telegram_user) === String(d.telegram_user); });\n    if (!u) return salida('⚠️ No encontré ese usuario.\\n\\n' + MENU, 'ADMIN', '0', {}, 'NO_ENCONTRADO');\n    if (String(u.telegram_user) === yo && r === 'USER') {\n      const otros = usuarios.filter(function (x) {\n        return String(x.rol || '').toUpperCase() === 'ADMIN' && String(x.telegram_user) !== yo;\n      });\n      if (otros.length === 0)\n        return salida('⚠️ Eres el único administrador del sistema.\\n' +\n                      'Si te quitas el rol ADMIN nadie podría administrar el bot.\\n' +\n                      'Primero nombra a otro administrador.\\n\\n' + MENU,\n                      'ADMIN', '0', {}, 'ULTIMO_ADMIN_PROTEGIDO');\n    }\n    return salida('🔑 Rol actualizado.\\n\\n👤 ' + (u.nombre || u.telegram_user) +\n                  '\\nAntes: ' + u.rol + '\\nAhora: ' + r + '\\n\\n' + MENU,\n                  'ADMIN', '0', {}, 'ROL_CAMBIADO:' + u.telegram_user + '->' + r,\n                  'ACTUALIZAR', fila(u, { rol: r }));\n  }\n  return salida(MENU, 'ADMIN', '0', {}, 'PASO_DESCONOCIDO');\n}\n\nreturn salida(MENU, 'ADMIN', '0', {}, 'PANTALLA_DESCONOCIDA');\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1648,
+        368
+      ],
+      "id": "90034cc5-944c-4edf-81fc-167287f0a025",
+      "name": "🧠 Lógica de Admin"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "078d0d00-ebd9-540e-954a-102dd39a4e25",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "NINGUNA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NINGUNA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b98dbc9e-9767-58ac-9840-bfa27fb4e622",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "ACTUALIZAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ACTUALIZAR"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": 0
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1888,
+        368
+      ],
+      "id": "12431aed-a889-44c4-8f75-41010f7bf60c",
+      "name": "🔀 Acción sobre USUARIOS"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        240
+      ],
+      "id": "e72191f2-4a5c-4957-bba9-b3a892b92538",
+      "name": "⏸️ Sin Escritura"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "USUARIOS"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telegram_user": "={{ $json.fila.telegram_user }}",
+            "nombre": "={{ $json.fila.nombre }}",
+            "rol": "={{ $json.fila.rol }}",
+            "permitido": "={{ $json.fila.permitido }}"
+          },
+          "matchingColumns": [
+            "telegram_user"
+          ],
+          "schema": [
+            {
+              "id": "telegram_user",
+              "displayName": "telegram_user",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rol",
+              "displayName": "rol",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "permitido",
+              "displayName": "permitido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        464
+      ],
+      "id": "1ba139fe-8668-4379-9056-8cf838a65c6c",
+      "name": "✏️ USUARIOS - Actualizar",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JuPn1JYqFGfHqS2U",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('🧠 Lógica de Admin').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje, pantalla_nueva: r.pantalla_nueva, paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales, resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        368
+      ],
+      "id": "442b63e8-b44b-4d18-a5e3-bb37ee267300",
+      "name": "📦 Salida Admin"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO ADMINISTRADOR\n\n**Doble barrera de seguridad**: el Router de `AgendaBot_Main` ya bloquea el acceso si el rol no es `ADMIN`, y este módulo **vuelve a comprobarlo** en su primera línea. Si alguien invocara el subworkflow directamente, seguiría estando protegido.\n\n**Protecciones anti-error**\n- Un admin no puede desactivarse a sí mismo.\n- No se puede degradar al **último** administrador que queda.\n\n**Opciones**: consultar usuarios · consultar los 20 logs más recientes · activar · desactivar · cambiar rol.",
+        "height": 440,
+        "width": 660,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        928,
+        -160
+      ],
+      "id": "61a8646d-bf5b-4cb6-b139-98a8e1c659fc",
+      "name": "NOTA ADMIN"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Entrada Admin": {
+      "main": [
+        [
+          {
+            "node": "📄 USUARIOS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 USUARIOS - Leer": {
+      "main": [
+        [
+          {
+            "node": "📄 LOGS - Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 LOGS - Leer": {
+      "main": [
+        [
+          {
+            "node": "🧠 Lógica de Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Lógica de Admin": {
+      "main": [
+        [
+          {
+            "node": "🔀 Acción sobre USUARIOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Acción sobre USUARIOS": {
+      "main": [
+        [
+          {
+            "node": "⏸️ Sin Escritura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✏️ USUARIOS - Actualizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏸️ Sin Escritura": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ USUARIOS - Actualizar": {
+      "main": [
+        [
+          {
+            "node": "📦 Salida Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "406211fc-9202-4238-83ca-0279c001a947",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+  },
+  "nodeGroups": [],
+  "id": "AiieuCb7NMv8QQ3i",
+  "tags": []
+}
