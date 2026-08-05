@@ -1,653 +1,96 @@
 {
-  "name": "AgendaBot_Main",
+  "name": "AgendaBot_Reportes",
   "nodes": [
     {
       "parameters": {
-        "content": "## 4) MÓDULOS (Execute Workflow)\n\nCada módulo es un workflow independiente que recibe el contexto completo y devuelve **siempre** el mismo contrato:\n\n```\n{ mensaje, pantalla_nueva, paso_nuevo,\n  datos_parciales, resultado }\n```\n\n⚠️ **Tras importar**: abre cada nodo *Módulo …* y vuelve a seleccionar el workflow en la lista, porque n8n asigna IDs nuevos al importar desde la interfaz.\n\nTodos tienen `onError: continuar`, de modo que un fallo puntual no tumba la conversación.",
-        "height": 420,
-        "width": 620,
-        "color": 7
+        "inputSource": "passthrough"
       },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
       "position": [
-        -4448,
-        -16
+        1536,
+        1472
       ],
-      "id": "343adb86-b3a3-4dae-8ce4-3e17b6b6b95c",
-      "name": "NOTA MODULOS"
+      "id": "d8da390e-adb0-48b0-ad03-057288cf6083",
+      "name": "▶️ Entrada Reportes"
     },
     {
       "parameters": {
-        "content": "## 3) SESIÓN Y ROUTER\n\n- **SESSIONS - Leer** + **Cargar Sesión**: recuperan `pantalla_actual`, `paso_actual` y `datos_parciales`. Si pasaron más de 6 h sin actividad, la sesión caduca y el usuario vuelve al menú.\n- **Router Principal**: con (pantalla + paso + texto) calcula `destino`. Nunca adivina la intención del usuario.\n- **Switch de Pantallas**: 8 salidas. La salida 0 (`BASE`) es además el *fallback*, así que un `destino` inesperado nunca rompe el flujo.",
-        "height": 500,
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LOGS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2944,
+        1472
+      ],
+      "id": "96462648-5b39-4c1c-abde-8cc2218d9e0e",
+      "name": "📄 LOGS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "xRCxidrtuVFYFbuF",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* =====================================================================\n   MODULO REPORTES (ACTUALIZADO CON PRODUCTIVIDAD)\n   ===================================================================== */\nconst ctx = $('▶️ Entrada Reportes').first().json;\nconst citas = filasReales($('📄 CITAS - Leer').all(), 'id_cita');\nconst tareas = filasReales($('📄 TAREAS - Leer').all(), 'id_tarea');\nconst habitos = filasReales($('📄 HABITOS - Leer').all(), 'id_habito');\nconst listas = filasReales($('📄 LISTAS - Leer').all(), 'id_lista');\nconst items = filasReales($('📄 ITEMS_LISTA - Leer').all(), 'id_item');\nconst logs = filasReales($input.all(), 'timestamp'); // Nueva lectura agregada\n\nconst texto = String(ctx.texto || '').trim();\nconst usuario = String(ctx.telegram_user);\nconst HOY = hoyISO();\nconst pantalla = String(ctx.pantalla_actual || 'REPORTES').toUpperCase();\nconst paso = String(ctx.paso_actual || '0');\nconst d = leerDatos(ctx.datos_parciales);\n\nconst MENU =\n  '📊 REPORTES\\n' +\n  'Números claros sobre lo que tienes registrado.\\n\\n' +\n  '1  Resumen general\\n' +\n  '2  Citas por estado\\n' +\n  '3  Tareas por prioridad y estado\\n' +\n  '4  Listas e ítems\\n' +\n  '6  Productividad por usuario (reporte completo)\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 1 Resumen general\\n' +\n  'Tip: escribe únicamente el número.';\n\nif (ctx.entrada_modulo === true || String(ctx.entrada_modulo) === 'true')\n  return salida(MENU, 'REPORTES', '0', {}, 'MENU_REPORTES');\n\n/* ----------------------------------------------------------------- SUBMENÚ REPORTES */\nif (pantalla === 'REPORTES_SUBMENU' && paso === '1') {\n  if (texto === '1') return salida(MENU, 'REPORTES', '0', {}, 'VOLVER_REPORTES');\n  if (texto === '2') return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.', 'MENU', '0', {}, 'VOLVER');\n  return salida(opcionInvalida('Espero 1 (Volver a Reportes) o 2 (Volver al menú principal).'), 'REPORTES_SUBMENU', '1', d, 'OPCION_INVALIDA');\n}\n\n/* ----------------------------------------------------------------- LECTURAS VIEJAS */\nconst misCitas = citas.filter(function (c) { return String(c.creado_por || '').trim() === usuario; });\nconst misTareas = tareas.filter(function (t) { return String(t.creado_por || '').trim() === usuario; });\nconst misListas = listas.filter(function (l) { return String(l.creado_por || '').trim() === usuario; });\nconst idsMisListas = misListas.map(function (l) { return String(l.id_lista); });\nconst misItems = items.filter(function (i) { return idsMisListas.indexOf(String(i.id_lista)) !== -1; });\nconst habVivos = habitos.filter(function (h) { return String(h.estado || '').toUpperCase() !== 'ELIMINADO'; });\n\nfunction cuenta(arr, campo) {\n  const m = {};\n  arr.forEach(function (r) {\n    const k = String(r[campo] || 'SIN DATO').toUpperCase();\n    m[k] = (m[k] || 0) + 1;\n  });\n  return m;\n}\nfunction pintaMapa(m, total) {\n  const ks = Object.keys(m).sort();\n  if (ks.length === 0) return '   (sin registros)';\n  return ks.map(function (k) {\n    const n = m[k];\n    const pct = total > 0 ? Math.round(n * 100 / total) : 0;\n    const barra = '█'.repeat(Math.max(1, Math.round(pct / 10)));\n    return '   ' + k.padEnd(14, ' ') + String(n).padStart(3, ' ') + '  ' + barra + ' ' + pct + '%';\n  }).join('\\n');\n}\n\nif (texto === '9')\n  return salida('👌 Volvamos al menú principal.\\n\\nEscribe /menu para verlo.', 'MENU', '0', {}, 'VOLVER');\n\nif (texto === '1' || texto === '') {\n  const activas = misCitas.filter(function (c) { return ['PENDIENTE', 'REPROGRAMADA'].indexOf(String(c.estado || '').toUpperCase()) !== -1; });\n  const abiertas = misTareas.filter(function (t) { return ['PENDIENTE', 'EN PROGRESO'].indexOf(String(t.estado || '').toUpperCase()) !== -1; });\n  const itemsPend = misItems.filter(function (i) { return String(i.estado || '').toUpperCase() === 'PENDIENTE'; });\n  const hoyCitas = activas.filter(function (c) { return String(c.fecha) === HOY; });\n  return salida('📊 RESUMEN GENERAL   ·   ' + HOY + '\\n════════════════════════\\n\\n📅 CITAS\\n   Total registradas: ' + misCitas.length + '\\n   Activas:           ' + activas.length + '\\n   Para hoy:          ' + hoyCitas.length + '\\n\\n✅ TAREAS\\n   Total registradas: ' + misTareas.length + '\\n   Abiertas:          ' + abiertas.length + '\\n\\n🔁 HÁBITOS\\n   Registrados:       ' + habVivos.length + '\\n   Activos:           ' + habVivos.filter(function (h) { return String(h.estado || '').toUpperCase() === 'ACTIVO'; }).length + '\\n\\n📝 LISTAS\\n   Listas:            ' + misListas.length + '\\n   Ítems totales:     ' + misItems.length + '\\n   Ítems pendientes:  ' + itemsPend.length + '\\n\\n' + MENU, 'REPORTES', '0', {}, 'REPORTE_GENERAL');\n}\n\nif (texto === '2') {\n  const m = cuenta(misCitas, 'estado');\n  return salida('📅 CITAS POR ESTADO   (total ' + misCitas.length + ')\\n\\n' + pintaMapa(m, misCitas.length) + '\\n\\n' + MENU, 'REPORTES', '0', {}, 'REPORTE_CITAS');\n}\n\nif (texto === '3') {\n  return salida('✅ TAREAS   (total ' + misTareas.length + ')\\n\\nPOR PRIORIDAD\\n' + pintaMapa(cuenta(misTareas, 'prioridad'), misTareas.length) + '\\n\\nPOR ESTADO\\n' + pintaMapa(cuenta(misTareas, 'estado'), misTareas.length) + '\\n\\n' + MENU, 'REPORTES', '0', {}, 'REPORTE_TAREAS');\n}\n\nif (texto === '4') {\n  if (misListas.length === 0) return salida('📭 Todavía no tienes listas registradas.\\n\\n' + MENU, 'REPORTES', '0', {}, 'REPORTE_VACIO');\n  const detalle = misListas.map(function (l) {\n    const its = misItems.filter(function (i) { return String(i.id_lista) === String(l.id_lista); });\n    const p = its.filter(function (i) { return String(i.estado || '').toUpperCase() === 'PENDIENTE'; }).length;\n    const c = its.filter(function (i) { return String(i.estado || '').toUpperCase() === 'COMPLETADO'; }).length;\n    const avance = its.length > 0 ? Math.round(c * 100 / its.length) : 0;\n    return '• ' + l.nombre_lista + '  [' + l.tipo + ']\\n    ' + its.length + ' ítems · ' + p + ' pendientes · ' + c + ' completados · ' + avance + '% avance';\n  }).join('\\n');\n  return salida('📝 LISTAS E ÍTEMS   (' + misListas.length + ' listas)\\n\\n' + detalle + '\\n\\n' + MENU, 'REPORTES', '0', {}, 'REPORTE_LISTAS');\n}\n\n/* ----------------------------------------------------------------- NUEVA OPCIÓN 6 */\nif (texto === '6') {\n  const stats = {};\n\n  // 1. Citas\n  citas.forEach(function(c) {\n    const u = String(c.creado_por || '').trim();\n    if (!u) return;\n    if (!stats[u]) stats[u] = { cTot: 0, cComp: 0, cCanc: 0, tTot: 0, tComp: 0, tPend: 0, ints: 0 };\n    stats[u].cTot++;\n    const e = String(c.estado || '').toUpperCase();\n    if (e === 'COMPLETADA') stats[u].cComp++;\n    if (e === 'CANCELADA') stats[u].cCanc++;\n  });\n\n  // 2. Tareas\n  tareas.forEach(function(t) {\n    const u = String(t.creado_por || '').trim();\n    if (!u) return;\n    if (!stats[u]) stats[u] = { cTot: 0, cComp: 0, cCanc: 0, tTot: 0, tComp: 0, tPend: 0, ints: 0 };\n    stats[u].tTot++;\n    const e = String(t.estado || '').toUpperCase();\n    if (e === 'COMPLETADA') stats[u].tComp++;\n    if (e === 'PENDIENTE') stats[u].tPend++;\n  });\n\n  // 3. Logs\n  logs.forEach(function(l) {\n    const u = String(l.telegram_user || '').trim();\n    if (!u || u === 'DESCONOCIDO') return;\n    if (!stats[u]) stats[u] = { cTot: 0, cComp: 0, cCanc: 0, tTot: 0, tComp: 0, tPend: 0, ints: 0 };\n    stats[u].ints++;\n  });\n\n  let totCitas = 0, totTareas = 0, totInts = 0;\n  let maxInts = -1, userActivo = 'N/A';\n  \n  // Ordenar alfabéticamente por telegram_user (Regla obligatoria)\n  const users = Object.keys(stats).sort(function(a, b) { return a.localeCompare(b); });\n\n  users.forEach(function(u) {\n    totCitas += stats[u].cTot;\n    totTareas += stats[u].tTot;\n    totInts += stats[u].ints;\n    if (stats[u].ints > maxInts) {\n      maxInts = stats[u].ints;\n      userActivo = u;\n    }\n  });\n\n  // Mensaje humanizado emulando la espera de procesamiento\n  let rep = 'Perfecto. Voy a generarte el reporte de productividad.\\n\\n' +\n            'En un momento ya te lo muestro.\\n' +\n            '➖➖➖➖➖➖➖➖➖➖\\n\\n' +\n            '📊 *Reporte de productividad (AgendaBot)*\\n\\n' +\n            '*Resumen general*\\n' +\n            '- Usuario más activo: @' + userActivo + '\\n' +\n            '- Total citas registradas: ' + totCitas + '\\n' +\n            '- Total tareas registradas: ' + totTareas + '\\n' +\n            '- Total interacciones con el bot: ' + totInts + '\\n\\n' +\n            '*Detalle por usuario*\\n';\n\n  users.forEach(function(u, i) {\n    const d = stats[u];\n    rep += (i + 1) + ') @' + u + '\\n' +\n           '   - Citas: ' + d.cTot + ' (Completadas: ' + d.cComp + ' | Canceladas: ' + d.cCanc + ')\\n' +\n           '   - Tareas: ' + d.tTot + ' (Hechas: ' + d.tComp + ' | Pendientes: ' + d.tPend + ')\\n' +\n           '   - Interacciones: ' + d.ints + '\\n\\n';\n  });\n\n  rep += '¿Qué deseas hacer ahora?\\n1. Volver al menú Reportes\\n2. Volver al menú principal';\n\n  // Navegación con condicionales para manejar la respuesta\n  return salida(rep, 'REPORTES_SUBMENU', '1', {}, 'REPORTE_PRODUCTIVIDAD_OK');\n}\n\nreturn salida(opcionInvalida('En Reportes espero 1, 2, 3, 4, 6 o 9.') + '\\n\\n' + MENU,\n              'REPORTES', '0', {}, 'OPCION_INVALIDA');"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3184,
+        1472
+      ],
+      "id": "a12043ef-8c60-42b5-90a7-7f845302d9f6",
+      "name": "🧠 Lógica de Reportes1"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('🧠 Lógica de Reportes1').first().json;\nreturn [{ json: {\n  mensaje: r.mensaje, pantalla_nueva: r.pantalla_nueva, paso_nuevo: r.paso_nuevo,\n  datos_parciales: r.datos_parciales, resultado: r.resultado\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3408,
+        1472
+      ],
+      "id": "79b131a6-2c59-4fb7-9015-be466f8bbea7",
+      "name": "📦 Salida Reportes1"
+    },
+    {
+      "parameters": {
+        "content": "## MÓDULO REPORTES (lectura completa de 6 tablas)\n\nLee las **seis hojas de negocio en cadena** (CITAS, TAREAS, HABITOS, LISTAS, ITEMS_LISTA y LOGS) para consolidar los conteos individuales y el reporte global de productividad por usuario.",
+        "height": 420,
         "width": 700,
         "color": 6
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -5424,
-        416
+        1632,
+        1024
       ],
-      "id": "a3a6f8a7-5f70-4978-9980-7fdbefac2534",
-      "name": "NOTA ESTADO"
-    },
-    {
-      "parameters": {
-        "content": "## 2) IDENTIDAD Y PERMISOS\n\n- **USUARIOS - Leer**: trae toda la hoja USUARIOS.\n- **Validar Usuario**: busca `telegram_user`. Si no existe y `AUTO_REGISTRO = true`, lo da de alta. El **primer** usuario del sistema recibe rol `ADMIN`.\n- **¿Usuario Nuevo?** (IF): decide si hay que insertar la fila.\n- **¿Tiene Permiso?** (IF): si `permitido` no es TRUE, el flujo termina con el mensaje de acceso denegado y queda registrado en LOGS.\n\nPara cerrar el bot a invitados: abre *Validar Usuario* y pon `AUTO_REGISTRO = false`.",
-        "height": 500,
-        "width": 700,
-        "color": 3
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -6864,
-        416
-      ],
-      "id": "0541d5b2-86d5-4578-a99d-0a7323b7ae78",
-      "name": "NOTA SEGURIDAD"
-    },
-    {
-      "parameters": {
-        "content": "## 1) INGESTA DE MENSAJES (Polling)\n\nn8n Community sin URL pública no puede recibir webhooks de Telegram, por eso **consultamos** la API cada 20 segundos.\n\n- **Polling Telegram (20 s)**: dispara el ciclo.\n- **Preparar Offset**: lee `offset` de la memoria estática del workflow.\n- **Telegram getUpdates**: `GET /getUpdates?offset=N`. ⚠️ Reemplaza `TELEGRAM_BOT_TOKEN` en la URL.\n- **Parsear Mensajes**: 1 item por mensaje y avanza el offset.\n- **Procesar Uno a Uno**: lote de 1 para que cada mensaje tenga su propia lectura de USUARIOS y SESSIONS.\n\nEl *offset* garantiza que **ningún mensaje se procese dos veces**.",
-        "height": 520,
-        "width": 760,
-        "color": 5
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -8304,
-        416
-      ],
-      "id": "bc44ebff-2353-4bd5-a4ce-6ac0108d14b1",
-      "name": "NOTA INGESTA"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "XrjQDsGgS6lMcACw",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/XrjQDsGgS6lMcACw",
-          "cachedResultName": "AgendaBot_Sessions"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -5264,
-        1184
-      ],
-      "id": "34325916-096d-482a-a5eb-88f246a98c5f",
-      "name": "📝 Registrar Log",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "XrjQDsGgS6lMcACw",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/XrjQDsGgS6lMcACw",
-          "cachedResultName": "AgendaBot_Sessions"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -5504,
-        1184
-      ],
-      "id": "73284f2c-ae2b-4423-afee-1338da70b8ce",
-      "name": "💾 Guardar Sesión",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* El nodo de Telegram devuelve su propia respuesta; recuperamos el payload\n   original para poder guardar la sesion y el log con los datos correctos.  */\nreturn [{ json: $('✅ Consolidar Respuesta').first().json }];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -5744,
-        1184
-      ],
-      "id": "198d6092-3b20-48ff-bc8e-d36820eb9caf",
-      "name": "♻️ Payload Sesión y Log"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.mensaje }}",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        -5984,
-        1184
-      ],
-      "id": "2629c511-6de3-4964-a6a3-351bf8d3a661",
-      "name": "📤 Enviar a Telegram",
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "webhookId": "76762a9a-c60e-49b9-a041-250a21af0122",
-      "credentials": {
-        "telegramApi": {
-          "id": "SAELJk0zi8my641I",
-          "name": "Telegram account"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* Punto unico de reunion de las 8 ramas del Switch.\n   Blinda la respuesta: si un subworkflow fallo o no devolvio mensaje,\n   el usuario recibe un texto amable y la sesion se reinicia con seguridad. */\nconst ctx = $('🧭 Router Principal').first().json;\nconst r = ($input.first() && $input.first().json) ? $input.first().json : {};\n\nlet mensaje = (typeof r.mensaje === 'string' && r.mensaje.trim() !== '') ? r.mensaje : null;\nlet pantalla = String(r.pantalla_nueva || '').toUpperCase();\nlet paso = String(r.paso_nuevo == null ? '0' : r.paso_nuevo);\nlet datos = (typeof r.datos_parciales === 'string') ? r.datos_parciales : '{}';\nlet resultado = String(r.resultado || 'OK');\n\nif (!mensaje) {\n  mensaje = '😕 Ocurrió un problema al procesar tu solicitud y no pude completarla.\\n' +\n            'Tus datos guardados están a salvo. Volvamos a empezar desde el menú principal.\\n\\n' +\n            'Escribe /menu para continuar.';\n  pantalla = 'MENU'; paso = '0'; datos = '{}'; resultado = 'ERROR_CONTROLADO';\n}\nif (!pantalla) pantalla = 'MENU';\n\n/* Cuando un módulo devuelve al menú principal, se adjunta el menú completo\n   para que el usuario no tenga que escribir /menu a continuación.        */\nif (resultado === 'VOLVER' && pantalla === 'MENU') {\n  mensaje = '👌 Volvamos al menú principal.\\n\\n' +\n    '🏠 MENÚ PRINCIPAL\\n' +\n    'Elige lo que quieres hacer.\\n\\n' +\n    '0  Ayuda\\n1  Agenda\\n2  Tareas\\n3  Recordatorios\\n4  Hábitos\\n' +\n    '5  Listas\\n6  Reportes\\n7  Configuración\\n8  Administrador\\n\\n' +\n    '💡 Recomendado: 1 Agenda\\n' +\n    'Tip: escribe únicamente el número.';\n}\n\nif (mensaje.length > 3900) mensaje = mensaje.slice(0, 3880) + '\\n…(mensaje recortado)';\n\nreturn [{ json: {\n  chat_id: String(ctx.chat_id),\n  telegram_user: String(ctx.telegram_user),\n  mensaje: mensaje,\n  destino: ctx.destino,\n  sesion: {\n    telegram_user: String(ctx.telegram_user),\n    pantalla_actual: pantalla,\n    paso_actual: paso,\n    datos_parciales: datos,\n    timestamp_ultima_interaccion: timestampCO()\n  },\n  log: {\n    timestamp: timestampCO(),\n    telegram_user: String(ctx.telegram_user),\n    pantalla: String(ctx.pantalla_actual || 'MENU'),\n    opcion_elegida: String(ctx.texto || ''),\n    resultado: resultado\n  }\n}}];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -6224,
-        1184
-      ],
-      "id": "ca8f51f9-b75b-469a-912a-af3c4340bed2",
-      "name": "✅ Consolidar Respuesta"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "AiieuCb7NMv8QQ3i",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/AiieuCb7NMv8QQ3i",
-          "cachedResultName": "AgendaBot_Admin"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6528,
-        1744
-      ],
-      "id": "4f0036cb-4f4a-4586-8b54-be6186258189",
-      "name": "🛡️ Módulo Administrador",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "5E7cnY929zhMLS08",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/5E7cnY929zhMLS08",
-          "cachedResultName": "AgendaBot_Reportes"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6528,
-        1584
-      ],
-      "id": "6884e5f7-e14f-4399-a680-d0c031889f76",
-      "name": "📊 Módulo Reportes",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "RwSb5gMFC9SLaAdf",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/RwSb5gMFC9SLaAdf",
-          "cachedResultName": "AgendaBot_Listas"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6528,
-        1424
-      ],
-      "id": "1ccd3a37-3b17-4cb6-a1f6-3c78a4dea29c",
-      "name": "📝 Módulo Listas",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "09iuUgD9loVpz6mf",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/09iuUgD9loVpz6mf",
-          "cachedResultName": "AgendaBot_Habitos"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6528,
-        1264
-      ],
-      "id": "78050f3a-7e41-4d0c-aeca-882dbfa10823",
-      "name": "🔁 Módulo Hábitos",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "W3PQIitGnrFC5Lvy",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/W3PQIitGnrFC5Lvy",
-          "cachedResultName": "AgendaBot_Recordatorios"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6528,
-        1104
-      ],
-      "id": "70f6ae59-0b1d-48c4-a908-5f41ed61a077",
-      "name": "🔔 Módulo Recordatorios",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "ZYsJUGdQCfg3ERuQ",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/ZYsJUGdQCfg3ERuQ",
-          "cachedResultName": "AgendaBot_Tareas"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6528,
-        944
-      ],
-      "id": "2dbb409e-2948-41a7-b3ad-ebba8465e9a5",
-      "name": "✅ Módulo Tareas",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "j1tAFC6ML58B3FiG",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/j1tAFC6ML58B3FiG",
-          "cachedResultName": "AgendaBot_Agenda"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6528,
-        784
-      ],
-      "id": "28115ffd-1087-4353-b3bc-130c0a9c46f2",
-      "name": "📅 Módulo Agenda",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* Pantallas que no necesitan Google Sheets: menu, ayuda, configuracion y\n   respuestas de control (opcion invalida, cancelacion, permiso denegado).   */\nconst c = $input.first().json;\nconst vista = String(c.vista_base || 'MENU');\n\nconst MENU =\n  '🏠 MENÚ PRINCIPAL\\n' +\n  'Elige lo que quieres hacer.\\n\\n' +\n  '0  Ayuda\\n' +\n  '1  Agenda\\n' +\n  '2  Tareas\\n' +\n  '3  Recordatorios\\n' +\n  '4  Hábitos\\n' +\n  '5  Listas\\n' +\n  '6  Reportes\\n' +\n  '7  Configuración\\n' +\n  '8  Administrador\\n\\n' +\n  '💡 Recomendado: 1 Agenda\\n' +\n  'Tip: escribe únicamente el número.';\n\nconst BIENVENIDA =\n  'Hola, soy AgendaBot 👋\\n' +\n  'Estoy aquí para ayudarte a organizar tus citas, tareas y recordatorios de forma sencilla.\\n' +\n  'Puedes escribirme cuando quieras.\\n' +\n  'Para avanzar solo escribe el número de la opción.\\n\\n' + MENU;\n\nconst AYUDA =\n  '❓ AYUDA DE AGENDABOT\\n' +\n  'Funciono con menús numerados: tú escribes un número y yo respondo.\\n\\n' +\n  'QUÉ PUEDO HACER\\n' +\n  '• Agenda: crear, consultar, reprogramar, cancelar y completar citas.\\n' +\n  '• Tareas: crear tareas con prioridad y cambiar su estado.\\n' +\n  '• Recordatorios: ver lo que viene y recibir avisos automáticos.\\n' +\n  '• Hábitos: crear hábitos y activarlos o desactivarlos.\\n' +\n  '• Listas: crear listas y administrar sus ítems.\\n' +\n  '• Reportes: ver cuántas citas, tareas, hábitos y listas tienes.\\n\\n' +\n  'COMANDOS SIEMPRE DISPONIBLES\\n' +\n  '/menu       vuelve al menú principal\\n' +\n  '/cancelar   descarta lo que estabas haciendo\\n' +\n  '/ayuda      muestra esta pantalla\\n' +\n  '/start      reinicia la conversación\\n\\n' +\n  'FORMATOS QUE ESPERO\\n' +\n  '• Fecha: AAAA-MM-DD   (ejemplo: ' + sumarDias(hoyISO(), 1) + ')\\n' +\n  '• Hora:  HH:MM en formato 24 horas   (ejemplo: 15:30)\\n\\n' +\n  '💡 Recomendado: escribe 9 para volver al menú principal.';\n\nconst CONFIG =\n  '⚙️ CONFIGURACIÓN\\n' +\n  'Estos son los datos con los que te tengo registrado.\\n\\n' +\n  '👤 Nombre: ' + (c.nombre || 'Usuario') + '\\n' +\n  '🆔 Usuario de Telegram: ' + c.telegram_user + '\\n' +\n  '🔑 Rol: ' + c.rol + '\\n' +\n  '✅ Estado: ' + (c.permitido ? 'Habilitado' : 'Bloqueado') + '\\n' +\n  '🕒 Zona horaria del sistema: America/Bogotá (UTC-5)\\n' +\n  '📅 Fecha de hoy según el bot: ' + hoyISO() + '\\n' +\n  '⏰ Hora actual según el bot: ' + horaActual() + '\\n\\n' +\n  'Si necesitas cambiar tu nombre o tu rol, pídeselo a un administrador.\\n\\n' +\n  '9  Volver al menú principal\\n\\n' +\n  '💡 Recomendado: 9 Volver';\n\nconst INVALIDO =\n  opcionInvalida('Estoy esperando un número del 0 al 8.') + '\\n\\n' + MENU;\n\nconst CANCELADO =\n  '✅ Listo, cancelé lo que estabas haciendo.\\n' +\n  'No guardé ningún dato a medias.\\n\\n' + MENU;\n\nconst SIN_PERMISO_ADMIN =\n  '🔒 La sección Administrador es exclusiva para usuarios con rol ADMIN.\\n' +\n  'Tu rol actual es: ' + c.rol + '.\\n' +\n  'Si necesitas acceso, solicítalo a un administrador.\\n\\n' + MENU;\n\n/* Ante un mensaje que no es texto NO se pierde el progreso: se avisa y se\n   conserva exactamente la misma pantalla, paso y datos parciales.        */\nif (vista === 'NO_TEXTO') {\n  return salida(\n    '📎 Por ahora solo entiendo mensajes de texto.\\n' +\n    'No puedo procesar fotos, audios, stickers ni archivos.\\n\\n' +\n    'No te preocupes: seguimos justo donde estábamos.\\n' +\n    'Escribe tu respuesta como texto, o usa /menu para empezar de nuevo.',\n    String(c.pantalla_actual || 'MENU'),\n    String(c.paso_actual || '0'),\n    leerDatos(c.datos_parciales),\n    'TIPO_NO_SOPORTADO');\n}\n\nconst VISTAS = {\n  BIENVENIDA: { m: BIENVENIDA, p: 'MENU', r: 'BIENVENIDA' },\n  MENU:       { m: MENU,       p: 'MENU', r: 'MENU' },\n  AYUDA:      { m: AYUDA,      p: 'AYUDA', r: 'AYUDA' },\n  CONFIG:     { m: CONFIG,     p: 'CONFIG', r: 'CONFIG' },\n  INVALIDO:   { m: INVALIDO,   p: 'MENU', r: 'OPCION_INVALIDA' },\n  CANCELADO:  { m: CANCELADO,  p: 'MENU', r: 'CANCELADO' },\n  SIN_PERMISO_ADMIN: { m: SIN_PERMISO_ADMIN, p: 'MENU', r: 'SIN_PERMISO_ADMIN' }\n};\n\nconst v = VISTAS[vista] || VISTAS.MENU;\nreturn salida(v.m, v.p, '0', {}, v.r, 'NINGUNA', {});\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -6528,
-        624
-      ],
-      "id": "531e4993-58c5-4f7b-aa5c-bef3282d410f",
-      "name": "🖥️ Pantallas Base"
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "c8ba2496-946c-5d9b-abcf-c1113181f8b7",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "BASE",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "BASE"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "ea204da2-919f-57a9-a9cb-7e3d3680333c",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "AGENDA",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "AGENDA"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "42677831-56f7-579d-9487-fdb03c7ba786",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "TAREAS",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "TAREAS"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "eb6973fe-3a3c-5b44-82b0-1b4ef352ca7e",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "RECORDATORIOS",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "RECORDATORIOS"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "b9d7ad3f-71ad-5b15-87ab-8b476a0d0b90",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "HABITOS",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "HABITOS"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "1170ef69-1d60-5153-8f18-742d8c23bd7f",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "LISTAS",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "LISTAS"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "2fafabee-49c2-5acd-8dad-0e51ac1f857c",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "REPORTES",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "REPORTES"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "1a51159f-f7b0-5b88-83ec-7d904599f002",
-                    "leftValue": "={{ $json.destino }}",
-                    "rightValue": "ADMIN",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "ADMIN"
-            }
-          ]
-        },
-        "looseTypeValidation": true,
-        "options": {
-          "fallbackOutput": 0
-        }
-      },
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
-      "position": [
-        -6800,
-        1184
-      ],
-      "id": "0447b304-1c68-4f81-bb95-bac181dbf0b9",
-      "name": "🔀 Switch de Pantallas"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* ============================ ROUTER PRINCIPAL ============================\n   Decide a que modulo se envia el mensaje. NUNCA adivina la intencion:\n   la decision sale de (pantalla_actual + paso_actual + texto recibido).\n   Salidas posibles en $json.destino:\n     BASE | AGENDA | TAREAS | RECORDATORIOS | HABITOS | LISTAS | REPORTES | ADMIN\n   ========================================================================= */\nconst c = $input.first().json;\nconst texto = String(c.texto || '').trim();\nconst t = texto.toLowerCase();\nconst rol = String(c.rol || 'USER').toUpperCase();\n\nlet pantalla = String(c.pantalla_actual || 'MENU').toUpperCase();\nlet paso = String(c.paso_actual || '0');\nlet datos = c.datos_parciales || '{}';\nlet destino = 'BASE';\nlet vista = 'MENU';\n/* entrada_modulo = true significa \"acabo de entrar al módulo desde el menú\".\n   El módulo debe MOSTRAR su menú, no interpretar el número que se escribió\n   para entrar. Sin esta bandera el dígito se consumiría dos veces:\n   una para elegir el módulo y otra como opción dentro del módulo.        */\nlet entradaModulo = false;\n\nconst MODULOS = ['AGENDA', 'TAREAS', 'RECORDATORIOS', 'HABITOS', 'LISTAS', 'REPORTES', 'ADMIN'];\nconst PANTALLAS_BASE = ['MENU', 'AYUDA', 'CONFIG', 'ACCESO_DENEGADO', ''];\nconst MAPA_MENU = { '0': 'AYUDA', '1': 'AGENDA', '2': 'TAREAS', '3': 'RECORDATORIOS',\n                    '4': 'HABITOS', '5': 'LISTAS', '6': 'REPORTES', '7': 'CONFIG', '8': 'ADMIN' };\n\nif (c.tipo !== 'TEXTO' || texto === '') {\n  destino = 'BASE'; vista = 'NO_TEXTO';\n} else if (t === '/start') {\n  destino = 'BASE'; vista = 'BIENVENIDA'; pantalla = 'MENU'; paso = '0'; datos = '{}';\n} else if (t === '/menu' || t === 'menu' || t === '/inicio' || t === 'inicio') {\n  destino = 'BASE'; vista = 'MENU'; pantalla = 'MENU'; paso = '0'; datos = '{}';\n} else if (t === '/cancelar' || t === 'cancelar') {\n  destino = 'BASE'; vista = 'CANCELADO'; pantalla = 'MENU'; paso = '0'; datos = '{}';\n} else if (t === '/ayuda' || t === '/help' || t === 'ayuda') {\n  destino = 'BASE'; vista = 'AYUDA'; pantalla = 'AYUDA'; paso = '0';\n} else if (PANTALLAS_BASE.indexOf(pantalla) !== -1) {\n  if (texto === '9') {\n    destino = 'BASE'; vista = 'MENU'; pantalla = 'MENU'; paso = '0'; datos = '{}';\n  } else {\n    const d = MAPA_MENU[texto];\n    if (!d) {\n      destino = 'BASE'; vista = 'INVALIDO'; pantalla = 'MENU'; paso = '0';\n    } else if (d === 'AYUDA') {\n      destino = 'BASE'; vista = 'AYUDA'; pantalla = 'AYUDA'; paso = '0';\n    } else if (d === 'CONFIG') {\n      destino = 'BASE'; vista = 'CONFIG'; pantalla = 'CONFIG'; paso = '0';\n    } else {\n      destino = d; pantalla = d; paso = '0'; datos = '{}'; entradaModulo = true;\n    }\n  }\n} else {\n  const raiz = pantalla.split('_')[0];\n  if (MODULOS.indexOf(raiz) !== -1) {\n    destino = raiz;\n  } else {\n    destino = 'BASE'; vista = 'MENU'; pantalla = 'MENU'; paso = '0'; datos = '{}';\n  }\n}\n\n/* Control de permisos por rol: el modulo ADMIN es exclusivo del rol ADMIN. */\nif (destino === 'ADMIN' && rol !== 'ADMIN') {\n  destino = 'BASE'; vista = 'SIN_PERMISO_ADMIN'; pantalla = 'MENU'; paso = '0';\n  datos = '{}'; entradaModulo = false;\n}\n\nreturn [{ json: Object.assign({}, c, {\n  texto: texto,\n  pantalla_actual: pantalla,\n  paso_actual: paso,\n  datos_parciales: datos,\n  destino: destino,\n  vista_base: vista,\n  entrada_modulo: entradaModulo\n})}];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -7040,
-        1184
-      ],
-      "id": "1f95a15b-f55f-47f7-a9ce-43839e3a1695",
-      "name": "🧭 Router Principal"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* Carga la fila de SESSIONS del usuario. Si no existe o esta vencida (6 h de\n   inactividad) la conversacion arranca de nuevo en el MENU principal.        */\nconst HORAS_VIGENCIA = 6;\nconst ctx = $('🔐 Validar Usuario').first().json;\nconst filas = filasReales($input.all(), 'telegram_user');\nconst s = filas.find(function (r) {\n  return String(r.telegram_user).trim() === String(ctx.telegram_user).trim();\n});\n\nlet pantalla = 'MENU', paso = '0', datos = '{}', existe = false, vencida = false;\n\nif (s) {\n  existe = true;\n  pantalla = (String(s.pantalla_actual || '').trim().toUpperCase()) || 'MENU';\n  paso = (String(s.paso_actual == null ? '' : s.paso_actual).trim()) || '0';\n  datos = String(s.datos_parciales || '{}');\n  const ult = String(s.timestamp_ultima_interaccion || '').trim();\n  if (ult) {\n    const t = Date.parse(ult.replace(' ', 'T') + 'Z');\n    if (!isNaN(t) && ((Date.now() + TZ_OFFSET_MS) - t) > HORAS_VIGENCIA * 3600 * 1000) {\n      pantalla = 'MENU'; paso = '0'; datos = '{}'; vencida = true;\n    }\n  }\n}\n\nreturn [{ json: Object.assign({}, ctx, {\n  pantalla_actual: pantalla,\n  paso_actual: paso,\n  datos_parciales: datos,\n  sesion_existente: existe,\n  sesion_vencida: vencida\n})}];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -7280,
-        1184
-      ],
-      "id": "03f4dac8-6cf7-4a7d-99dd-8a8af90df6f8",
-      "name": "🧠 Cargar Sesión"
+      "id": "349c73f9-344d-4210-b579-7e5a8e952c7d",
+      "name": "NOTA REPORTES1"
     },
     {
       "parameters": {
@@ -660,303 +103,32 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": 1007,
+          "value": "gid=0",
           "mode": "list",
-          "cachedResultName": "SESSIONS",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1007"
+          "cachedResultName": "CITAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=0"
         },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        -7520,
-        1184
+        1856,
+        1472
       ],
-      "id": "5d538975-d49b-4a23-b30b-0677c5f66443",
-      "name": "🗂️ SESSIONS - Leer",
+      "id": "049efe16-d844-42ca-8bf1-500e5e8d87a3",
+      "name": "📄 CITAS - Leer",
       "alwaysOutputData": true,
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000,
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "JuPn1JYqFGfHqS2U",
+          "id": "xRCxidrtuVFYFbuF",
           "name": "Google Sheets account"
         }
       },
       "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "rd5yNzRrIMlCupAi",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/rd5yNzRrIMlCupAi",
-          "cachedResultName": "AgendaBot_Logs"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -6800,
-        1472
-      ],
-      "id": "879b8847-44d0-4cd0-9140-59bf0bdccc7a",
-      "name": "📝 Log de Acceso Denegado",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "\nreturn [{ json: $('🚫 Acceso Denegado').first().json }];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -7040,
-        1472
-      ],
-      "id": "0ed0b9f9-9c9d-4ef9-bb6a-4d2a7fa4fe59",
-      "name": "♻️ Payload Log Denegado"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.mensaje }}",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        -7280,
-        1472
-      ],
-      "id": "1073b339-fa4a-426e-8225-167d411cd3b7",
-      "name": "📤 Aviso Sin Permiso",
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "webhookId": "ed6f99b4-04b0-474f-ae66-099b8cfc5d23",
-      "credentials": {
-        "telegramApi": {
-          "id": "SAELJk0zi8my641I",
-          "name": "Telegram account"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\nconst c = $input.first().json;\nconst mensaje =\n  '🚫 No tienes permisos para usar AgendaBot.\\n\\n' +\n  'Si crees que se trata de un error, comunícate con el administrador ' +\n  'y entrégale este identificador:\\n\\n🆔 ' + c.telegram_user +\n  '\\n\\nGracias por tu comprensión.';\nreturn [{ json: Object.assign({}, c, {\n  mensaje: mensaje,\n  log: {\n    timestamp: timestampCO(),\n    telegram_user: String(c.telegram_user),\n    pantalla: 'ACCESO_DENEGADO',\n    opcion_elegida: String(c.texto || ''),\n    resultado: 'DENEGADO'\n  }\n})}];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -7520,
-        1472
-      ],
-      "id": "28bddc3c-8ebd-434c-b33d-68a2e67d2012",
-      "name": "🚫 Acceso Denegado"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "5fecaed2-a63f-533a-84fd-b398eae30bcb",
-              "leftValue": "={{ $json.permitido ? 'SI' : 'NO' }}",
-              "rightValue": "SI",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "looseTypeValidation": true,
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        -7760,
-        1184
-      ],
-      "id": "e7b6e105-4a6d-4567-8708-736b194ad6c0",
-      "name": "🔎 ¿Tiene Permiso?"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* Google Sheets devuelve la fila insertada; recuperamos el contexto original. */\nreturn [{ json: $('🔐 Validar Usuario').first().json }];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -8000,
-        1072
-      ],
-      "id": "507ab91d-c343-4bef-936b-0e6815a470d2",
-      "name": "♻️ Contexto Tras Registro"
-    },
-    {
-      "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
-          "mode": "list",
-          "cachedResultName": "AgendaBot_DB",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": 1005,
-          "mode": "list",
-          "cachedResultName": "USUARIOS",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1005"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "telegram_user": "={{ $json.fila_usuario.telegram_user }}",
-            "nombre": "={{ $json.fila_usuario.nombre }}",
-            "rol": "={{ $json.fila_usuario.rol }}",
-            "permitido": "={{ $json.fila_usuario.permitido }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "telegram_user",
-              "displayName": "telegram_user",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "nombre",
-              "displayName": "nombre",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "rol",
-              "displayName": "rol",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "permitido",
-              "displayName": "permitido",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
-      "position": [
-        -8240,
-        1072
-      ],
-      "id": "33993c7b-788c-4d28-b648-e9de2061df6b",
-      "name": "👤 USUARIOS - Registrar",
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "JuPn1JYqFGfHqS2U",
-          "name": "Google Sheets account"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "98156d16-35a1-56a2-86e8-af63f2f0070f",
-              "leftValue": "={{ $json.es_nuevo ? 'SI' : 'NO' }}",
-              "rightValue": "SI",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "looseTypeValidation": true,
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        -8480,
-        1184
-      ],
-      "id": "3a0edde6-d0e2-44f4-a95e-7c9e8d44dbc7",
-      "name": "❓ ¿Usuario Nuevo?"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* ======================= VALIDACION DE USUARIO =======================\n   AUTO_REGISTRO = true  -> un usuario desconocido se da de alta solo.\n   AUTO_REGISTRO = false -> un usuario desconocido queda bloqueado.\n   El PRIMER usuario que escribe al bot recibe rol ADMIN (bootstrap).\n   ==================================================================== */\nconst AUTO_REGISTRO = true;\nconst ROL_POR_DEFECTO = 'USER';\n\nconst msg = $('📥 Mensaje Actual').first().json;\nconst filas = filasReales($input.all(), 'telegram_user');\nconst fila = filas.find(function (r) {\n  return String(r.telegram_user).trim() === String(msg.telegram_user).trim();\n});\n\nlet rol = ROL_POR_DEFECTO;\nlet permitido = false;\nlet esNuevo = false;\nlet nombre = msg.nombre_telegram;\n\nif (fila) {\n  rol = (String(fila.rol || '').trim().toUpperCase()) || ROL_POR_DEFECTO;\n  permitido = esVerdadero(fila.permitido);\n  nombre = limpiar(fila.nombre) || msg.nombre_telegram;\n} else {\n  esNuevo = true;\n  if (AUTO_REGISTRO) {\n    permitido = true;\n    rol = (filas.length === 0) ? 'ADMIN' : ROL_POR_DEFECTO;\n  }\n}\n\nreturn [{ json: Object.assign({}, msg, {\n  rol: rol,\n  permitido: permitido,\n  es_nuevo: esNuevo,\n  nombre: nombre,\n  fila_usuario: {\n    telegram_user: String(msg.telegram_user),\n    nombre: nombre,\n    rol: rol,\n    permitido: permitido ? 'TRUE' : 'FALSE'\n  }\n})}];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -8720,
-        1184
-      ],
-      "id": "7743250b-2c28-4ed4-af99-71b22930de68",
-      "name": "🔐 Validar Usuario"
     },
     {
       "parameters": {
@@ -969,28 +141,28 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": 1005,
+          "value": 1001,
           "mode": "list",
-          "cachedResultName": "USUARIOS",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1005"
+          "cachedResultName": "TAREAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1001"
         },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        -8960,
-        1184
+        2080,
+        1472
       ],
-      "id": "9238c9e1-50f4-4ae3-bee7-38c5764b5c58",
-      "name": "👥 USUARIOS - Leer",
+      "id": "72ca976d-7c99-409d-841b-e3f1e987fb7e",
+      "name": "📄 TAREAS - Leer",
       "alwaysOutputData": true,
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000,
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "JuPn1JYqFGfHqS2U",
+          "id": "xRCxidrtuVFYFbuF",
           "name": "Google Sheets account"
         }
       },
@@ -998,586 +170,203 @@
     },
     {
       "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* Normaliza el mensaje del lote actual (el Loop entrega de a 1). */\nconst m = $input.first().json;\nconst texto = String(m.texto == null ? '' : m.texto).trim();\nreturn [{ json: {\n  telegram_user: String(m.telegram_user),\n  chat_id: String(m.chat_id),\n  nombre_telegram: m.nombre_telegram || 'Usuario',\n  username: m.username || '',\n  texto: texto,\n  texto_min: texto.toLowerCase(),\n  tipo: m.tipo || 'TEXTO',\n  recibido_en: m.recibido_en || timestampCO()\n}}];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -9200,
-        1184
-      ],
-      "id": "d39b55f6-c853-432d-94a4-0259f8e3aeac",
-      "name": "📥 Mensaje Actual"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        -9008,
-        880
-      ],
-      "id": "02ca1dd5-11e1-458f-abf9-5b2305efda8e",
-      "name": "🏁 Fin del Ciclo"
-    },
-    {
-      "parameters": {
-        "options": {
-          "reset": false
-        }
-      },
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        -9440,
-        1152
-      ],
-      "id": "d90b8155-f65d-4e23-b924-34c384edf52d",
-      "name": "🔁 Procesar Uno a Uno"
-    },
-    {
-      "parameters": {
-        "jsCode": "\n/* ============================================================\n   AgendaBot :: Helpers comunes (sin dependencias externas)\n   Zona horaria fija: America/Bogota (UTC-5, sin horario de verano)\n   ============================================================ */\nconst TZ_OFFSET_MS = -5 * 60 * 60 * 1000;\nfunction pad(n, l) { return String(n).padStart(l, '0'); }\nfunction ahora() { return new Date(Date.now() + TZ_OFFSET_MS); }\nfunction aFechaISO(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1, 2) + '-' + pad(d.getUTCDate(), 2); }\nfunction aHoraHM(d) { return pad(d.getUTCHours(), 2) + ':' + pad(d.getUTCMinutes(), 2); }\nfunction hoyISO() { return aFechaISO(ahora()); }\nfunction horaActual() { return aHoraHM(ahora()); }\nfunction timestampCO() { const d = ahora(); return aFechaISO(d) + ' ' + aHoraHM(d) + ':' + pad(d.getUTCSeconds(), 2); }\nfunction sumarDias(f, n) {\n  const p = String(f).split('-').map(Number);\n  return aFechaISO(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)));\n}\nfunction esFechaValida(s) {\n  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(s || ''))) return false;\n  const p = String(s).split('-').map(Number);\n  if (p[1] < 1 || p[1] > 12) return false;\n  const diasMes = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();\n  return p[2] >= 1 && p[2] <= diasMes && p[0] >= 2000 && p[0] <= 2100;\n}\nfunction esHoraValida(s) { return /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s || '')); }\nfunction esPasado(f, h) {\n  const hoy = hoyISO();\n  if (f < hoy) return true;\n  if (f === hoy && h && h <= horaActual()) return true;\n  return false;\n}\nfunction vacio(s) { return String(s == null ? '' : s).trim().length === 0; }\nfunction limpiar(s) { return String(s == null ? '' : s).trim().replace(/\\s+/g, ' ').slice(0, 200); }\nfunction filasReales(items, clave) {\n  return items.map(function (i) { return i.json; })\n              .filter(function (r) { return r && r[clave] != null && String(r[clave]).trim() !== ''; });\n}\nfunction siguienteId(filas, campo, prefijo) {\n  let max = 0;\n  for (const r of filas) {\n    const m = String(r[campo] || '').match(/(\\d+)\\s*$/);\n    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }\n  }\n  return prefijo + '-' + pad(max + 1, 3);\n}\nfunction leerDatos(t) { try { const o = JSON.parse(t || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }\nfunction esVerdadero(v) {\n  const s = String(v == null ? '' : v).trim().toUpperCase();\n  return s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'SÍ' || s === '1' || s === 'X' || s === 'YES';\n}\nconst PIE = '\\n————————\\n9 Volver   ·   /menu Menú principal   ·   /cancelar Cancelar';\nfunction opcionInvalida(extra) {\n  return '⚠️ No entendí esa opción.\\n' + (extra || 'Escribe únicamente el número de una de las opciones mostradas.');\n}\nfunction salida(mensaje, pantalla, paso, datos, resultado, accion, fila) {\n  return [{ json: {\n    mensaje: String(mensaje).slice(0, 3900),\n    pantalla_nueva: pantalla,\n    paso_nuevo: String(paso),\n    datos_parciales: JSON.stringify(datos || {}),\n    resultado: resultado || 'OK',\n    accion: accion || 'NINGUNA',\n    fila: fila || {}\n  }}];\n}\n\n/* Convierte la respuesta de getUpdates en un item por mensaje de texto. */\nconst resp = $input.first() ? $input.first().json : {};\nconst st = $getWorkflowStaticData('global');\n\nif (resp && resp.ok === false) {\n  // Telegram devolvio error (token invalido, 409 por doble polling, etc.)\n  // No movemos el offset para no perder mensajes.\n  return [];\n}\n\nconst updates = Array.isArray(resp.result) ? resp.result : [];\nif (updates.length === 0) return [];\n\nlet maxId = (typeof st.offset === 'number' && st.offset > 0) ? st.offset - 1 : 0;\nconst salidaItems = [];\n\nfor (const u of updates) {\n  if (typeof u.update_id === 'number' && u.update_id > maxId) maxId = u.update_id;\n  const m = u.message;\n  if (!m || !m.chat) continue;\n  const texto = String(m.text == null ? '' : m.text).trim();\n  const from = m.from || {};\n  const nombreTg = limpiar(((from.first_name || '') + ' ' + (from.last_name || '')).trim()\n                    || from.username || 'Usuario');\n  salidaItems.push({ json: {\n    update_id: u.update_id,\n    chat_id: String(m.chat.id),\n    telegram_user: String(from.id || m.chat.id),\n    nombre_telegram: nombreTg,\n    username: String(from.username || ''),\n    texto: texto ? texto.slice(0, 500) : '',\n    tipo: texto ? 'TEXTO' : 'NO_TEXTO',\n    recibido_en: timestampCO()\n  }});\n}\n\n// El offset avanza SIEMPRE que Telegram respondio bien, incluso si el mensaje\n// no era de texto: de lo contrario ese update se repetiria eternamente.\nst.offset = maxId + 1;\nreturn salidaItems;\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -9680,
-        1152
-      ],
-      "id": "01f938c0-d483-4bde-b4f7-0f1f0e975663",
-      "name": "📨 Parsear Mensajes",
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "url": "https://api.telegram.org/bot8813443028:AAExk6yhtnQgEJdNW-IQiV4J3Ino9YTRHLU/getUpdates",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "offset",
-              "value": "={{ $json.offset }}"
-            },
-            {
-              "name": "timeout",
-              "value": "0"
-            },
-            {
-              "name": "limit",
-              "value": "50"
-            },
-            {
-              "name": "allowed_updates",
-              "value": "[\"message\"]"
-            }
-          ]
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
         },
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          },
-          "timeout": 20000
+        "sheetName": {
+          "__rl": true,
+          "value": 1002,
+          "mode": "list",
+          "cachedResultName": "HABITOS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1002"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2304,
+        1472
+      ],
+      "id": "8d701635-9b8f-46cb-a17f-db47b29dd44f",
+      "name": "📄 HABITOS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "xRCxidrtuVFYFbuF",
+          "name": "Google Sheets account"
         }
       },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        -9920,
-        1152
-      ],
-      "id": "bf5b8dbe-1c69-4420-bf8c-3873cd7155d6",
-      "name": "📡 Telegram getUpdates",
-      "alwaysOutputData": true,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "\n/* Recupera el ultimo update_id procesado desde la memoria estatica del workflow.\n   n8n persiste $getWorkflowStaticData('global') entre ejecuciones cuando el\n   workflow esta ACTIVO. Asi no se reprocesan mensajes ya atendidos.          */\nconst st = $getWorkflowStaticData('global');\nif (typeof st.offset !== 'number' || !isFinite(st.offset)) st.offset = 0;\nreturn [{ json: { offset: st.offset } }];\n"
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1003,
+          "mode": "list",
+          "cachedResultName": "LISTAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1003"
+        },
+        "options": {}
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
       "position": [
-        -10160,
-        1152
+        2512,
+        1472
       ],
-      "id": "5cf9cf4c-f714-4487-b312-17b789bf0258",
-      "name": "🔢 Preparar Offset"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [
-        -10400,
-        1280
-      ],
-      "id": "a38c1f33-b920-43a6-927f-e88cc12889d6",
-      "name": "🧪 Ejecución Manual (pruebas)"
+      "id": "1d2c880e-f783-40dd-944d-99978bf9b57e",
+      "name": "📄 LISTAS - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "xRCxidrtuVFYFbuF",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "seconds",
-              "secondsInterval": 10
-            }
-          ]
+        "documentId": {
+          "__rl": true,
+          "value": "168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc",
+          "mode": "list",
+          "cachedResultName": "AgendaBot_DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1004,
+          "mode": "list",
+          "cachedResultName": "ITEMS_LISTA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/168N7ux4ov96joBmO9tR3EjgjedoVW3tTYxZHGC5nRLc/edit#gid=1004"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2736,
+        1472
+      ],
+      "id": "b251fe07-ff64-4fc5-9c69-a0364ca70678",
+      "name": "📄 ITEMS_LISTA - Leer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "xRCxidrtuVFYFbuF",
+          "name": "Google Sheets account"
         }
       },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        -10400,
-        1072
-      ],
-      "id": "96c8fd99-914d-40fa-ad59-ef501337d396",
-      "name": "⏱️ Polling Telegram (20 s)"
+      "onError": "continueRegularOutput"
     }
   ],
   "pinData": {},
   "connections": {
-    "💾 Guardar Sesión": {
+    "▶️ Entrada Reportes": {
       "main": [
         [
           {
-            "node": "📝 Registrar Log",
+            "node": "📄 CITAS - Leer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "♻️ Payload Sesión y Log": {
+    "📄 LOGS - Leer": {
       "main": [
         [
           {
-            "node": "💾 Guardar Sesión",
+            "node": "🧠 Lógica de Reportes1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "📤 Enviar a Telegram": {
+    "🧠 Lógica de Reportes1": {
       "main": [
         [
           {
-            "node": "♻️ Payload Sesión y Log",
+            "node": "📦 Salida Reportes1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "✅ Consolidar Respuesta": {
+    "📄 CITAS - Leer": {
       "main": [
         [
           {
-            "node": "📤 Enviar a Telegram",
+            "node": "📄 TAREAS - Leer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "🛡️ Módulo Administrador": {
+    "📄 TAREAS - Leer": {
       "main": [
         [
           {
-            "node": "✅ Consolidar Respuesta",
+            "node": "📄 HABITOS - Leer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "📊 Módulo Reportes": {
+    "📄 HABITOS - Leer": {
       "main": [
         [
           {
-            "node": "✅ Consolidar Respuesta",
+            "node": "📄 LISTAS - Leer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "📝 Módulo Listas": {
+    "📄 LISTAS - Leer": {
       "main": [
         [
           {
-            "node": "✅ Consolidar Respuesta",
+            "node": "📄 ITEMS_LISTA - Leer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "🔁 Módulo Hábitos": {
+    "📄 ITEMS_LISTA - Leer": {
       "main": [
         [
           {
-            "node": "✅ Consolidar Respuesta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🔔 Módulo Recordatorios": {
-      "main": [
-        [
-          {
-            "node": "✅ Consolidar Respuesta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "✅ Módulo Tareas": {
-      "main": [
-        [
-          {
-            "node": "✅ Consolidar Respuesta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "📅 Módulo Agenda": {
-      "main": [
-        [
-          {
-            "node": "✅ Consolidar Respuesta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🖥️ Pantallas Base": {
-      "main": [
-        [
-          {
-            "node": "✅ Consolidar Respuesta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🔀 Switch de Pantallas": {
-      "main": [
-        [
-          {
-            "node": "🖥️ Pantallas Base",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "📅 Módulo Agenda",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "✅ Módulo Tareas",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "🔔 Módulo Recordatorios",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "🔁 Módulo Hábitos",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "📝 Módulo Listas",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "📊 Módulo Reportes",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "🛡️ Módulo Administrador",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🧭 Router Principal": {
-      "main": [
-        [
-          {
-            "node": "🔀 Switch de Pantallas",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🧠 Cargar Sesión": {
-      "main": [
-        [
-          {
-            "node": "🧭 Router Principal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🗂️ SESSIONS - Leer": {
-      "main": [
-        [
-          {
-            "node": "🧠 Cargar Sesión",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "♻️ Payload Log Denegado": {
-      "main": [
-        [
-          {
-            "node": "📝 Log de Acceso Denegado",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "📤 Aviso Sin Permiso": {
-      "main": [
-        [
-          {
-            "node": "♻️ Payload Log Denegado",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🚫 Acceso Denegado": {
-      "main": [
-        [
-          {
-            "node": "📤 Aviso Sin Permiso",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🔎 ¿Tiene Permiso?": {
-      "main": [
-        [
-          {
-            "node": "🗂️ SESSIONS - Leer",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "🚫 Acceso Denegado",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "♻️ Contexto Tras Registro": {
-      "main": [
-        [
-          {
-            "node": "🔎 ¿Tiene Permiso?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "👤 USUARIOS - Registrar": {
-      "main": [
-        [
-          {
-            "node": "♻️ Contexto Tras Registro",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "❓ ¿Usuario Nuevo?": {
-      "main": [
-        [
-          {
-            "node": "👤 USUARIOS - Registrar",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "🔎 ¿Tiene Permiso?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🔐 Validar Usuario": {
-      "main": [
-        [
-          {
-            "node": "❓ ¿Usuario Nuevo?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "👥 USUARIOS - Leer": {
-      "main": [
-        [
-          {
-            "node": "🔐 Validar Usuario",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "📥 Mensaje Actual": {
-      "main": [
-        [
-          {
-            "node": "👥 USUARIOS - Leer",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "📝 Registrar Log": {
-      "main": [
-        [
-          {
-            "node": "🔁 Procesar Uno a Uno",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "📝 Log de Acceso Denegado": {
-      "main": [
-        [
-          {
-            "node": "🔁 Procesar Uno a Uno",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🔁 Procesar Uno a Uno": {
-      "main": [
-        [
-          {
-            "node": "🏁 Fin del Ciclo",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "📥 Mensaje Actual",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "📨 Parsear Mensajes": {
-      "main": [
-        [
-          {
-            "node": "🔁 Procesar Uno a Uno",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "📡 Telegram getUpdates": {
-      "main": [
-        [
-          {
-            "node": "📨 Parsear Mensajes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🔢 Preparar Offset": {
-      "main": [
-        [
-          {
-            "node": "📡 Telegram getUpdates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "🧪 Ejecución Manual (pruebas)": {
-      "main": [
-        [
-          {
-            "node": "🔢 Preparar Offset",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "⏱️ Polling Telegram (20 s)": {
-      "main": [
-        [
-          {
-            "node": "🔢 Preparar Offset",
+            "node": "📄 LOGS - Leer",
             "type": "main",
             "index": 0
           }
@@ -1591,12 +380,12 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "d5a2f1bb-4559-49b2-a690-07ed52ab0965",
+  "versionId": "9fbf3929-f518-42dd-9efd-3694d33544cc",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "dc4cd16bf8010edeec9f8971af4daf48343c98ceccc0ba97d27fc9d36e6127d0"
+    "instanceId": "2194ed31e7ddf2f3503c74fda96fcec1106a5e47bc71c62b55ba5ea2d8734bb9"
   },
   "nodeGroups": [],
-  "id": "YrprfktJk5bjufSh",
+  "id": "GTPqNcDIj25crIPX",
   "tags": []
 }
