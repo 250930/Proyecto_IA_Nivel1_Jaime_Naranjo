@@ -121,3 +121,15 @@ El documento principal consta de 8 hojas con generación automática de identifi
 **Jaime Andrés Naranjo Pinzón**  
 *Frontend Designer & Web Developer*  
 *Campusland · Colombia*
+
+### 📈 Nuevo: Reporte de Productividad por Usuario
+Se integró una nueva opción avanzada dentro del menú de **Reportes (Opción 6)**. Este módulo ahora consolida la información de las hojas `CITAS`, `TAREAS` y `LOGS` para generar una métrica de rendimiento grupal e individual.
+
+**Funcionalidades del reporte:**
+* **Lectura Multi-Hoja:** Procesa de manera encadenada todo el historial de la base de datos sin depender de webhooks externos.
+* **Métricas Individuales:** Agrupa los datos alfabéticamente por usuario (identificador de Telegram).
+  * *Citas:* Total registradas, completadas y canceladas.
+  * *Tareas:* Total registradas, hechas y pendientes.
+  * *Interacciones:* Conteo total de acciones del usuario registradas en los logs.
+* **Control de Nulos:** Los usuarios sin historial en tareas o citas aparecen con valores absolutos en `0`, garantizando que el reporte no se rompa por falta de registros.
+* **Resumen General:** Destaca al usuario más activo del sistema y las sumatorias globales.
